@@ -5,12 +5,12 @@ title: |
   | PRACTICAL 1
 author: "Enna H"
 output: 
-  html_document: 
-    toc: true 
-    toc_float: true
+  pdf_document:
+    toc: true
 editor_options:
   chunk_output_type: console
 ---
+
 
 
 ```{r echo = FALSE, include=FALSE}
