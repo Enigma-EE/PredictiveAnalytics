@@ -1,0 +1,508 @@
+---
+title: |
+  | INFS_SP5_2023
+  | Predictive Analytics
+  | PRACTICAL 2
+author: "Enna H"
+output: 
+  pdf_document:
+    toc: true
+editor_options:
+  chunk_output_type: console
+---
+
+
+
+```{r echo = FALSE, include=FALSE}
+# clear all variables, functions, etc
+# clean up memory
+rm(list=ls())
+# clean up memory
+gc()
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  fig.width = 8, 
+  fig.asp = 0.618, 
+  out.width = "80%",
+  fig.align = "center", 
+  root.dir = "../",
+  message = FALSE,
+  size = "small"
+)
+```
+
+
+```{r warning=FALSE, include=FALSE}
+pacman::p_load(tidyverse, gglm)
+pacman::p_load(knitr,dplyr,AICcmodavg)
+pacman::p_load(inspectdf,tidyr,stringr, stringi,DT)
+pacman::p_load(caret,modelr)
+pacman::p_load(mlbench,mplot)
+pacman::p_load(tidymodels,glmx)
+pacman::p_load(skimr,vip,yardstick,ranger,kknn,funModeling,Hmisc)
+pacman::p_load(ggplot2,ggpubr,ggthemes,gridExtra,scales)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+
+## 1. Missing Values
+
+```{r include=FALSE, warning=FALSE, message=FALSE}
+# load data
+data <- read.csv(url("http://bit.ly/infs5100_camden_data"))
+head(data)
+```
+
+```{r warning=FALSE, message=FALSE}
+# summary of data
+summary(data)
+```
+
+
+```{r warning=FALSE, message=FALSE}
+# check missing values
+inspectdf::inspect_na(data)
+```
+
+- introduce some missing values
+
+```{r warning=FALSE, message=FALSE}
+pacman::p_load(missForest)
+```
+
+```{r warning=FALSE, message=FALSE}
+# introduce 10% missing values
+data.mis <- prodNA(data, noNA = 0.1)
+```
+
+```{r warning=FALSE, message=FALSE}
+# check missing values
+inspectdf::inspect_na(data.mis)
+```
+
+```{r warning=FALSE, message=FALSE}
+# Remove categorical variables – OA, the first column in this case 
+data.mis <- subset(data.mis, select = -c(OA)) 
+head(data.mis)
+```
+
+
+**use mice package**
+
+```{r warning=FALSE, message=FALSE}
+# install.packages("mice")
+pacman::p_load(mice)
+```
+
+- md.pattern() function from the mice package provides a tabular form and a visualisation of the missing data pattern
+
+```{r warning=FALSE, message=FALSE}
+# Explore missing values 
+md.pattern(data.mis, rotate.names = TRUE) 
+```
+
+- 484 records without any missing values
+- 58 observations with missing values in Unemployed
+- 49 in Low_Occupancy
+- ...
+
+**use VIM package**
+    
+```{r warning=FALSE, message=FALSE}
+# install.packages("VIM")
+pacman::p_load(VIM)
+```
+
+```{r warning=FALSE, message=FALSE}
+missing.plot <- aggr(data.mis, col=c("navyblue", "#ffdd00"),
+                numbers = TRUE, sortVars = TRUE,
+                lables=names(data.mis), cex.axis=.6,
+                gap=3, ylab=c("Missing data", "Pattern"))
+```
+
+- impute missing values using mice package
+
+```{r warning=FALSE, message=FALSE,echo=TRUE, results='hide'}
+# Impute missing values
+data.imputed <- mice(data.mis, m=3, maxit = 50, method = 'pmm', seed = 500)
+```
+
+```{r warning=FALSE, message=FALSE}
+summary(data.imputed)
+```
+
+- m = 3, refers to the umber of imputed datasets. Instead of providing a single value, the method imputes multiple datasets.
+- maxit = 50, refers to the number of iterations taken to impute missing values.
+- method, refers to the method used in imputation. In this case, we used predictive mean  matching.
+
+```{r warning=FALSE, message=FALSE}
+# Explore imputed values
+data.imputed$imp$Unemployed
+```
+
+since we set m=3, you should see 3 columns, one for each of the imputed datasets.
+
+- use complete() function to extract the completed data (second dataset)
+
+```{r warning=FALSE, message=FALSE}
+# Select second complete dataset (out of 3)
+data.complete <- complete(data.imputed, 2)
+head(data.complete)
+```
+
+- plot histograms for each of the four columns (White_British, Low_Occupancy, Unemployed, Qualification) for the original dataset
+
+```{r warning=FALSE, message=FALSE}
+# Plot histograms for each of the four columns (White_British, Low_Occupancy, Unemployed, Qualification) for the original dataset
+par(mfrow=c(2,2))
+hist(data$White_British, main="White_British", xlab="White_British")
+hist(data$Low_Occupancy, main="Low_Occupancy", xlab="Low_Occupancy")
+hist(data$Unemployed, main="Unemployed", xlab="Unemployed")
+hist(data$Qualification, main="Qualification", xlab="Qualification")
+```
+
+- before imputation
+
+```{r warning=FALSE, message=FALSE}
+# Plot histograms for each of the four columns (White_British, Low_Occupancy, Unemployed, Qualification) for the original dataset
+par(mfrow=c(2,2))
+hist(data.mis$White_British, main="White_British", xlab="White_British")
+hist(data.mis$Low_Occupancy, main="Low_Occupancy", xlab="Low_Occupancy")
+hist(data.mis$Unemployed, main="Unemployed", xlab="Unemployed")
+hist(data.mis$Qualification, main="Qualification", xlab="Qualification")
+```
+
+- plot histograms for each of the four columns (White_British, Low_Occupancy, Unemployed, Qualification) for the imputed dataset (second dataset)
+
+```{r warning=FALSE, message=FALSE}
+par(mfrow=c(2,2))
+hist(data.complete$White_British, main="White_British", xlab="White_British")
+hist(data.complete$Low_Occupancy, main="Low_Occupancy", xlab="Low_Occupancy")
+hist(data.complete$Unemployed, main="Unemployed", xlab="Unemployed")
+hist(data.complete$Qualification, main="Qualification", xlab="Qualification")
+```
+
+- t test to compare the means of the original and imputed datasets
+
+```{r warning=FALSE, message=FALSE}
+t_test_result_1 <- t.test(data$White_British, data.complete$White_British)
+t_test_result_1
+```
+
+```{r warning=FALSE, message=FALSE}
+columns_to_test <- c("White_British", "Low_Occupancy", "Unemployed", "Qualification")
+
+t_test_results <- sapply(columns_to_test, function(col_name) {
+  t.test(data[[col_name]], data.complete[[col_name]])$p.value
+})
+
+names(t_test_results) <- columns_to_test
+t_test_results
+```
+
+The p-values are greater than the typical 0.05 significance level, indicating that there's no significant difference in means between the original and imputed data for these variables.
+
+- No Significant Difference: For all four variables, the p-values suggest that there is no statistically significant difference in means between the original dataset and the imputed dataset. This means that the imputation process did not significantly alter the central tendency of these variables.
+- Impact of Imputation: Since the t-tests did not detect significant differences, it could be inferred that the imputation method used was conservative in the sense that it did not significantly shift the means of these variables. It is consistent with an imputation process that maintains the overall distribution of the original data.
+  
+In the context of data imputation, these results can be seen as favorable, especially if the goal was to fill missing values in a way that preserves the overall statistical properties of the dataset. It might be beneficial to also assess the quality of the imputation in terms of the specific missing data mechanism (e.g., Missing Completely At Random, Missing At Random, Not Missing At Random) and the chosen imputation technique, as the suitability and impact of imputation can vary based on these factors.
+
+**Challenge 1.** In the example above, we used pmm - Predictive Mean Matching as a method to impute data. As you can see in the documentation for mice, there are other methods available. 
+
+- Choose two (2) additional methods (for instance, cart or quadratic) and repeat the imputation procedure from above.
+
+**cart**
+```{r warning=FALSE, message=FALSE,echo=TRUE, results='hide'}
+# Impute missing values with cart
+data.imputed.cart <- mice(data.mis, m=3, maxit = 50, method = 'cart', seed = 500)
+```
+    
+```{r warning=FALSE, message=FALSE}
+summary(data.imputed.cart)
+```
+
+use complete() function to extract the completed data (second dataset)
+
+```{r warning=FALSE, message=FALSE}
+# Select second complete dataset (out of 3)
+data.complete.cart <- complete(data.imputed.cart, 2)
+head(data.complete.cart)
+```
+
+- t test to compare the means of the original and imputed datasets
+
+```{r warning=FALSE, message=FALSE}
+columns_to_test <- c("White_British", "Low_Occupancy", "Unemployed", "Qualification")
+
+t_test_results_cart <- sapply(columns_to_test, function(col_name) {
+  t.test(data[[col_name]], data.complete.cart[[col_name]])$p.value
+})
+
+names(t_test_results_cart) <- columns_to_test
+t_test_results_cart
+```
+
+
+
+
+**norm.predict**
+```{r warning=FALSE, message=FALSE}
+# Impute missing values with norm.predict
+data.imputed.norm <- mice(data.mis, m=3, maxit = 50, method = 'norm.predict', seed = 500)
+```
+
+```{r warning=FALSE, message=FALSE}
+summary(data.imputed.norm)
+```
+
+use complete() function to extract the completed data (second dataset)
+
+```{r warning=FALSE, message=FALSE}
+# Select second complete dataset (out of 3)
+data.complete.norm <- complete(data.imputed.norm, 2)
+head(data.complete.norm)
+```
+
+- t test to compare the means of the original and imputed datasets
+
+```{r warning=FALSE, message=FALSE}
+columns_to_test <- c("White_British", "Low_Occupancy", "Unemployed", "Qualification")
+
+t_test_results_norm <- sapply(columns_to_test, function(col_name) {
+  t.test(data[[col_name]], data.complete.norm[[col_name]])$p.value
+})
+
+names(t_test_results_norm) <- columns_to_test
+t_test_results_norm
+```
+
+
+- explain how the methods selected are different from pmm? any differences in imputed data?
+
+All three methods result in p-values that are not statistically significant, indicating that the imputed datasets do not have a statistically different mean from the original dataset for the tested variables. This is a good sign, as it suggests that the imputation methods have maintained essential statistical properties of the data.
+
+However, these methods differ in their underlying assumptions and how they generate imputations:
+
+- pmm preserves the original distribution and is more flexible.
+- cart can capture complex relationships but might overfit if there's noise.
+- norm.predict assumes linear relationships and could be inappropriate if the true relationship is nonlinear.
+
+The choice between these methods depends on the underlying relationships between variables in the data, and it might be beneficial to consider diagnostic plots or other model evaluation criteria to select the most appropriate method for your particular dataset.
+
+
+## 2. Feature Selection
+
+-  Brute-force approach, where we try all possible feature subsets as input to data mining  algorithm. This approach is computationally expensive and not feasible for large datasets.
+-   Embedded approaches, where feature selection occurs naturally as part of the data mining algorithm. For example, decision trees and neural networks automatically select features as part of their algorithm.
+-   Filter approaches, where we use a statistical measure to score the relevance of each feature. This is a fast and efficient approach, but it does not take into account the interaction between features.
+-   Wrapper approaches, where we use a data mining algorithm to score the relevance of each feature, black-box style. This approach is computationally expensive, but it can take into account the interaction between features.
+
+Filter approaches are used here, mlr3 package is used to implement the filter approach.
+
+```{r warning=FALSE, message=FALSE}
+# install.packages("mlr3")
+pacman::p_load(mlr3, mlr3learners, mlr3viz, mlr3filters, FSelectorRcpp, mlr3pipelines)
+```
+
+
+```{r warning=FALSE, message=FALSE}
+set.seed(999)
+```
+
+
+```{r warning=FALSE, message=FALSE}
+filter.importance = flt("information_gain") # Creating a new filter 
+iris.task <- tsk("iris") # Creating a Task() object from the Iris dataset
+iris.feature.importance <- filter.importance$calculate(iris.task) # Calculating the feature importance
+as.data.table(iris.feature.importance) # Converting the feature importance to a data.table
+```
+
+- Petal.Width has the highest predictive power
+- Sepal.Width can likely be ignored for the classification task
+
+**plot feature importance**
+
+```{r warning=FALSE, message=FALSE}
+autoplot(iris.feature.importance)
+```
+
+
+**use mlr3pipelines package to create a pipeline**
+
+- filter.nfeat - number of features to select. Mutually exclusive with frac and cutoff,
+- filter.frac - fraction of features to keep. Mutually exclusive with nfeat and cutoff, or
+- filter.cutoff - minimum value of filter heuristic for which to keep features. Mutually exclusive with nfeat and frac.
+
+
+```{r warning=FALSE, message=FALSE}
+po = po("filter", filter.importance, filter.nfeat=3) # Creating a pipeline
+filtered.task = po$train(list(iris.task))[[1]] # Applying the pipeline to the task
+filtered.task$feature_names # Printing the names of the selected features
+```
+
+set number of features to return to 3
+which means that our pipeline should return the list of the three most important features for this specific task.
+
+```{r warning=FALSE, message=FALSE}
+iris.filtered = subset(iris, select = filtered.task$feature_names)
+head(iris.filtered)
+```
+
+
+**Challenge 2.** In the example above, we used information_gain as a method to select relevant features. there are many other implemented filters.
+
+- Choose three (3) additional and relevant methods and repeat the feature selection process from above.
+- mlr_filters
+
+```{r warning=FALSE, message=FALSE}
+filter.importance = flt("information_gain") # Creating a new filter
+iris.task <- tsk("iris") # Creating a Task() object from the Iris dataset
+iris.feature.importance <- filter.importance$calculate(iris.task) # Calculating the feature importance
+information_gain <- as.data.table(iris.feature.importance) # Converting the feature importance to a data.table
+```
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+filter.importance = flt("relief") # Creating a new filter
+iris.task <- tsk("iris") # Creating a Task() object from the Iris dataset
+iris.feature.importance <- filter.importance$calculate(iris.task) # Calculating the feature importance
+relief <- as.data.table(iris.feature.importance) # Converting the feature importance to a data.table
+```
+
+
+```{r warning=FALSE, message=FALSE}
+filter.importance = flt("disr") # Creating a new filter
+iris.task <- tsk("iris") # Creating a Task() object from the Iris dataset
+iris.feature.importance <- filter.importance$calculate(iris.task) # Calculating the feature importance
+disr <- as.data.table(iris.feature.importance) # Converting the feature importance to a data.table
+```
+
+```{r warning=FALSE, message=FALSE}
+filter.importance = flt("kruskal_test") # Creating a new filter
+iris.task <- tsk("iris") # Creating a Task() object from the Iris dataset
+iris.feature.importance <- filter.importance$calculate(iris.task) # Calculating the feature importance
+kruskal_test <- as.data.table(iris.feature.importance) # Converting the feature importance to a data.table
+```
+
+
+```{r warning=FALSE, message=FALSE}
+# Verifying each data frame
+print("Information Gain:")
+print(information_gain)
+
+print("Relief:")
+print(relief)
+
+print("DISR:")
+print(disr)
+
+print("Kruskal Test:")
+print(kruskal_test)
+```
+
+- Can you explain how the methods you selected are different from information_gain? Can you observe any differences in the feature importance?
+
+```{r warning=FALSE, message=FALSE}
+# Combine the data frames
+results <- data.frame(
+  feature = c(rep("Petal.Width", 4), rep("Petal.Length", 4), rep("Sepal.Length", 4), rep("Sepal.Width", 4)),
+  method = rep(c("Information Gain", "Relief", "DISR", "Kruskal Test"), 4),
+  score = c(information_gain$score, relief$score, disr$score, kruskal_test$score)
+)
+
+# Print the table
+kable(results)
+```
+
+**Information Gain:**
+The "Information Gain" method measures the reduction in uncertainty about the class labels using entropy. It focuses on the ability of features to split the data into subsets that are more homogeneous with respect to the target variable. This method assigns the highest importance scores to "Petal.Width" and "Sepal.Length," indicating their strong predictive power for classifying the Iris dataset.
+
+**Relief:**
+The "Relief" method is a filter feature selection technique that focuses on distinguishing instances that are close to each other from those that are far apart. It calculates feature importance based on how well features can separate instances of different classes. Unlike "information_gain," which uses entropy to measure the reduction in uncertainty about the class labels, "Relief" evaluates the ability of features to differentiate between instances. The results show that "Relief" assigns lower scores to "Petal.Width" and "Petal.Length" compared to "information_gain," indicating that these features might have less discriminative power according to this method.
+
+**DISR (Distance-based Similarity-Weighted Relief):**
+"DISR" is another variant of the Relief algorithm that incorporates distance-based similarity weighting. It considers the similarity between instances when updating feature weights. This method aims to mitigate the limitation of "Relief," where it may assign equal weights to irrelevant and relevant instances. The scores assigned by "DISR" are generally lower than those of "information_gain," indicating a more conservative approach to feature importance. This could suggest that "DISR" is giving less importance to certain features compared to "information_gain."
+
+**Kruskal Test:**
+The "Kruskal Test" is a statistical method used to compare the distribution of a numeric variable across different groups. In the context of feature selection, it evaluates whether the means of a feature vary significantly across different classes. This method is particularly suitable for situations where the classes are categorical, as in the case of the Iris dataset. The "Kruskal Test" assigns significantly lower scores to most features compared to "information_gain." This might suggest that the class-related differences captured by this test are not as pronounced as the entropy-based importance calculated by "information_gain."
+
+In summary, the selected methods differ in their underlying mechanisms for calculating feature importance. "Relief" and "DISR" emphasize instance separability and similarity, respectively, while the "Kruskal Test" leverages statistical significance across class distributions. These differences in methodology result in variations in the ranking and scores of feature importance compared to the "information_gain" method.
+
+1. **Consistency of High Importance:**
+   - For the "Information Gain" method, the feature "Sepal.Length" consistently receives the highest importance score (1.00) among all features. This suggests that "Sepal.Length" is deemed highly relevant for classifying the Iris dataset according to this method.
+
+2. **Comparative Importance Scores:**
+   - Across different methods, we see variations in the importance scores assigned to each feature. Notably, "Petal.Width" consistently ranks high in importance across "Information Gain," "Relief," and "DISR" methods. This consistency might indicate that "Petal.Width" has a significant impact on class separation and prediction across different methodologies.
+   - "Sepal.Width" exhibits very high importance scores in comparison to other features, particularly in the "Information Gain" and "Relief" methods. However, its importance is relatively lower in the "DISR" and "Kruskal Test" methods. This discrepancy suggests that "Sepal.Width" might play a more prominent role in these particular methods, potentially indicating its significance in some specific contexts.
+
+3. **Differential Impact of Methods:**
+   - The "Kruskal Test" assigns lower scores to almost all features, implying that the class-related differences captured by this test are not as pronounced in this dataset compared to the other methods. This may indicate that class distributions might not significantly vary for these features.
+
+4. **Feature Discrimination:**
+   - The lower importance scores for "Petal.Length" in various methods, especially "DISR" and "Kruskal Test," could imply that it might not have as strong discriminatory power as "Petal.Width" and "Sepal.Length" in this context.
+
+5. **Significance of Sepal.Length and Sepal.Width:**
+   - The "Kruskal Test" assigns a score of 0 to "Sepal.Length," which indicates that this feature might not exhibit significant class-based variations according to this method. Similarly, "Sepal.Width" receives comparatively lower scores in "DISR" and "Kruskal Test." This suggests that while "Sepal.Width" might have high importance according to "Information Gain" and "Relief," its significance could be challenged by the underlying characteristics assessed by "DISR" and "Kruskal Test."
+
+## 3. Correlation analysis
+
+For the purpose of building predictive models, you will want to avoid using highly correlated 
+features. This is because highly correlated features can cause problems when fitting models,
+such as multicollinearity in linear regression, which can lead to unstable parameter estimates.
+
+```{r warning=FALSE, message=FALSE}
+# Install and load the car package
+pacman::p_load(psych, corrplot)
+```
+
+```{r warning=FALSE, message=FALSE}
+# install.packages("psych")
+library(psych)
+data <- iris[, 1:4] # Numerical variables
+pairs.panels(data,
+             smooth = TRUE,      # If TRUE, draws loess smooths
+             scale = FALSE,      # If TRUE, scales the correlation text font
+             density = TRUE,     # If TRUE, adds density plots and histograms
+             ellipses = TRUE,    # If TRUE, draws ellipses
+             method = "pearson", # Correlation method (also "spearman" or "kendall")
+             pch = 21,           # pch symbol
+             lm = FALSE,         # If TRUE, plots linear fit rather than the LOESS (smoothed) fit
+             cor = TRUE,         # If TRUE, reports correlations
+             jiggle = FALSE,     # If TRUE, data points are jittered
+             factor = 2,         # Jittering factor
+             hist.col = 4,       # Histograms color
+             stars = TRUE,       # If TRUE, adds significance level with stars
+             ci = TRUE)          # If TRUE, adds confidence intervals
+```
+
+```{r warning=FALSE, message=FALSE}
+corPlot(data, cex = 1.2)
+```
+
+```{r warning=FALSE, message=FALSE}
+# Load the iris dataset
+data(iris)
+
+# Create a pairs plot using base R graphics
+pairs(iris[, 1:4], col = as.numeric(iris$Species))
+```
+
+- How would you interpret the plot above?
+The first plot seems to be a scatter plot displaying the relationships between different features of the iris dataset. Unfortunately, the labels and legends are not clearly visible in the image. However, I can infer some general characteristics:
+
+Data Distribution: The plot shows how the data points are distributed across different classes of the iris dataset.
+Feature Relationships: By examining the axes, we can deduce the relationships between different features, such as petal length, petal width, sepal length, and sepal width.
+Class Clustering: If the plot is color-coded by the iris species (Setosa, Versicolor, Virginica), we may observe how well the classes are separated based on the selected features.
+
+The second plot appears to be a pairplot or scatterplot matrix displaying pairwise relationships between different features of the iris dataset. The following insights can be drawn:
+
+Pairwise Relationships: Each scatterplot in the matrix represents the relationship between two features, allowing us to see how the variables interact with each other.
+Histograms: Along the diagonal, there may be histograms or kernel density estimates (KDEs) showing the univariate distribution of each feature.
+Class Separation: If the points are color-coded by species, the plots can show how well the species are differentiated based on the selected pairs of features.
+Correlation Patterns: By examining the scatterplots, one can identify potential correlations or linear relationships between different features.
+
+
+Both plots provide a visual exploration of the iris dataset, aiding in understanding feature distributions, correlations, and class separations. The first plot offers a focused view of the relationships between specific features, while the second plot provides a comprehensive overview of all pairwise feature interactions.

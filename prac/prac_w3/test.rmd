@@ -1,0 +1,28 @@
+
+
+```{r warning=FALSE, include=FALSE}
+pacman::p_load(tidyverse, gglm)
+pacman::p_load(knitr,dplyr,AICcmodavg)
+pacman::p_load(inspectdf,tidyr,stringr, stringi,DT)
+pacman::p_load(caret,modelr)
+pacman::p_load(mlbench,mplot)
+pacman::p_load(tidymodels,glmx)
+pacman::p_load(skimr,vip,yardstick,ranger,kknn,funModeling,Hmisc)
+pacman::p_load(ggplot2,ggpubr,ggthemes,gridExtra,scales)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+
+
+```{r warning=FALSE, message=FALSE}
+pacman::p_load(GGally)
+```
+
+```{r warning=FALSE, message=FALSE}
+# install.packages("GGally")
+library(GGally)
+
+ggpairs(iris, columns = 1:4, aes(color = Species, alpha = 0.5),
+        upper = list(continuous = wrap("cor", size = 2.5))) 
+
+```
