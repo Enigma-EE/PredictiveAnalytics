@@ -18,11 +18,10 @@ knitr::opts_chunk$set(message = FALSE)
 pacman::p_load(GGally)
 ```
 
+
 ```{r warning=FALSE, message=FALSE}
-# install.packages("GGally")
+# Load library
 library(GGally)
-
-ggpairs(iris, columns = 1:4, aes(color = Species, alpha = 0.5),
-        upper = list(continuous = wrap("cor", size = 2.5))) 
-
+# Assess the distribution and correlation of variables in Iris dataset
+ggpairs(iris, columns = 2:4, ggplot2::aes(colour=Species))
 ```

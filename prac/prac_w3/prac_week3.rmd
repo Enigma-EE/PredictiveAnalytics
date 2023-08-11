@@ -489,6 +489,15 @@ data(iris)
 # Create a pairs plot using base R graphics
 pairs(iris[, 1:4], col = as.numeric(iris$Species))
 ```
+  
+```{r warning=FALSE, message=FALSE}
+# Load library
+library(GGally)
+# Assess the distribution and correlation of variables in Iris dataset
+ggpairs(iris, columns = 2:4, ggplot2::aes(colour=Species))
+```
+
+
 
 - How would you interpret the plot above?
 The first plot seems to be a scatter plot displaying the relationships between different features of the iris dataset. Unfortunately, the labels and legends are not clearly visible in the image. However, I can infer some general characteristics:
