@@ -1,0 +1,372 @@
+---
+title: |
+  | INFS_SP5_2023
+  | Predictive Analytics
+  | PRACTICAL 2
+author: "Enna H"
+output: 
+  pdf_document:
+    toc: true
+editor_options:
+  chunk_output_type: console
+---
+
+
+
+```{r echo = FALSE, include=FALSE}
+# clear all variables, functions, etc
+# clean up memory
+rm(list=ls())
+# clean up memory
+gc()
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  fig.width = 8, 
+  fig.asp = 0.618, 
+  out.width = "80%",
+  fig.align = "center", 
+  root.dir = "../",
+  message = FALSE,
+  size = "small"
+)
+```
+
+
+```{r warning=FALSE, include=FALSE}
+pacman::p_load(tidyverse, gglm)
+pacman::p_load(knitr,dplyr,AICcmodavg)
+pacman::p_load(inspectdf,tidyr,stringr, stringi,DT)
+pacman::p_load(caret,modelr)
+pacman::p_load(mlbench,mplot)
+pacman::p_load(tidymodels,glmx)
+pacman::p_load(skimr,vip,yardstick,ranger,kknn,funModeling,Hmisc)
+pacman::p_load(ggplot2,ggpubr,ggthemes,gridExtra,scales)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+## Task1. Fitting a logistic regression mode
+
+```{r warning=FALSE, message=FALSE}
+# Load libraries
+pacman::p_load(pscl, ROCR)
+```
+
+
+```{r warning=FALSE, message=FALSE}
+data <- read.csv(url("https://raw.githubusercontent.com/sreckojoksimovic/infs5100/main/wine-data.csv"))
+```
+
+
+Make sure quality_class is factor
+
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+names(data) <- c("fixed_acidity", names(data)[2:12])
+data$fixed_acidity <- scale(data$fixed_acidity, scale = TRUE, center = TRUE)
+data$volatile_acidity <- scale(data$volatile_acidity, scale = TRUE, center =
+TRUE)
+data$citric_acid <- scale(data$citric_acid, scale = TRUE, center = TRUE)
+data$residual_sugar <- scale(data$residual_sugar, scale = TRUE, center =
+TRUE)
+data$chlorides <- scale(data$chlorides, scale = TRUE, center = TRUE)
+data$free_sulfur_dioxide <- scale(data$free_sulfur_dioxide, scale = TRUE,
+center = TRUE)
+data$total_sulfur_dioxide <- scale(data$total_sulfur_dioxide, scale = TRUE,
+center = TRUE)
+data$density <- scale(data$density, scale = TRUE, center = TRUE)
+data$pH <- scale(data$pH, scale = TRUE, center = TRUE)
+data$sulphates <- scale(data$sulphates, scale = TRUE, center = TRUE)
+data$alcohol <- scale(data$alcohol, scale = TRUE, center = TRUE)
+```
+
+
+```{r warning=FALSE, message=FALSE}
+# Ensure 'quality_class' is a factor
+data$quality_class <- as.factor(data$quality_class)
+
+# List of numeric variable names to be scaled
+numeric_vars <- c(
+  "fixed_acidity", "volatile_acidity", "citric_acid",
+  "residual_sugar", "chlorides", "free_sulfur_dioxide",
+  "total_sulfur_dioxide", "density", "pH", "sulphates", "alcohol"
+)
+
+# Scale numeric variables using vectorized operations
+data[numeric_vars] <- scale(data[numeric_vars], center = TRUE, scale = TRUE)
+```
+
+```{r warning=FALSE, message=FALSE}
+# Data input validation
+head(data)
+summary(data)
+```
+
+```{r warning=FALSE, message=FALSE}
+# Split data into training and test datasets. We will use 70%/30% split
+# again.
+set.seed(123)
+dat.d <- sample(1:nrow(data),size=nrow(data)*0.7,replace = FALSE) #random selection of 70% data.
+train.data <- data[dat.d,] # 70% training data
+test.data <- data[-dat.d,] # remaining % test data
+```
+
+```{r warning=FALSE, message=FALSE}
+model <- glm(quality_class ~., family=binomial(link='logit'),
+data=train.data)
+```
+
+## Task2. Interpreting a logistic regression model
+
+
+
+```{r warning=FALSE, message=FALSE}
+summary(model)
+```
+
+
+residual_sugar, sulphates and alcohol are positively and significantly
+associated with the probability that wine is of high quality. On the other hand, chlorides, total_sulfur_dioxide, and density are also significantly, but negatively associated with the probability that wine is of high quality
+
+Please remember that in the logit model the response variable is log odds: ln(odds) = ln(p/(1-p))= a*x1 + b*x2 + … + z*xn. This means that one unit increase in residual_sugar, increases the log odds by 0.33.
+
+```{r warning=FALSE, message=FALSE}
+anova(model, test="Chisq") 
+```
+
+The difference between the NULL deviance and the residual deviance shows how our model is doing compare to a model with only the intercept. The wider this gap, the better model.
+Analyzing the output above, we can see the drop in deviance when adding each variable one at a time. All the variables, except for residual_sugar and free_sulfur_dioxide, significantly improve the model.
+While no exact equivalent to the R2 of linear regression exists, the McFadden R2 index can be used to assess the model fit.
+
+```{r warning=FALSE, message=FALSE}
+pR2(model) # McFadden R2
+```
+
+Values between 0.2-0.4 for the McFadden R2 represent the excellent fit.
+
+## Task 3. Evaluating the predictive power of the model
+
+
+calculate various evaluation metrics, to assess the predictive ability of our model.
+
+```{r warning=FALSE, message=FALSE}
+fitted.results <- predict(model, newdata=test.data, type='response')
+fitted.results <- ifelse(fitted.results > 0.5,1,0)
+confusionMatrix(as.factor(fitted.results), as.factor(test.data[, 12]))
+```
+
+
+
+- 379 instances where the model predicted class 0 when the actual class was also 0. There were 26 instances where the model predicted class 1 when the actual class was 1.
+
+- the model achieved an accuracy of 0.8785, meaning it correctly classified approximately 87.85% of the test instances.
+
+- The 95% confidence interval - the true accuracy is estimated to be within the range of 0.8452 to 0.9069.
+
+- The no-information rate (NIR) is the accuracy that could be achieved by always predicting the most frequent class. In this case, the most frequent class is 0, and the no-information rate is 0.8482.
+
+- The Cohen's Kappa statistic measures the agreement between the predicted and actual class labels, while accounting for the agreement that could occur by chance. A value closer to 1 indicates better agreement than would be expected by chance alone. Here, a Kappa of 0.4194 suggests moderate agreement.
+
+- Sensitivity (also known as True Positive Rate) measures the proportion of actual positive instances that were correctly predicted. Specificity (also known as True Negative Rate) measures the proportion of actual negative instances that were correctly predicted. In this case, the model has high sensitivity (correctly predicting positives) but low specificity (correctly predicting negatives).
+
+
+
+## Challenge 1. Can you add feature selection to the pipeline?
+
+```{r warning=FALSE, message=FALSE}
+# Load libraries
+pacman::p_load(glmnet)
+
+# Load the data and preprocess (as before)
+data <- read.csv(url("https://raw.githubusercontent.com/sreckojoksimovic/infs5100/main/wine-data.csv"))
+
+# Ensure 'quality_class' is a factor
+data$quality_class <- as.factor(data$quality_class)
+
+# List of numeric variable names to be scaled
+numeric_vars <- c(
+  "fixed_acidity", "volatile_acidity", "citric_acid",
+  "residual_sugar", "chlorides", "free_sulfur_dioxide",
+  "total_sulfur_dioxide", "density", "pH", "sulphates", "alcohol"
+)
+
+# Scale numeric variables using vectorized operations
+data[numeric_vars] <- scale(data[numeric_vars], center = TRUE, scale = TRUE)
+
+# Split data into training and test datasets. We will use 70%/30% split
+set.seed(123)
+dat.d <- sample(1:nrow(data), size=nrow(data)*0.7, replace = FALSE)
+train.data <- data[dat.d,]
+test.data <- data[-dat.d,]
+
+# Split into predictors (X) and response (Y) for train and test data
+x.train <- as.matrix(train.data[, numeric_vars])
+y.train <- train.data$quality_class
+x.test <- as.matrix(test.data[, numeric_vars])
+y.test <- test.data$quality_class
+
+# Use LASSO (L1 regularization) for feature selection
+cv.fit <- cv.glmnet(x.train, y.train, family="binomial", alpha=1)
+
+# Get the coefficients of the selected features
+coef(cv.fit, s=cv.fit$lambda.min)
+
+# Build the final model with selected features
+final.model <- glmnet(x.train, y.train, family="binomial", alpha=1, lambda=cv.fit$lambda.min)
+
+# Predict using the test data
+fitted.results <- predict(final.model, s=cv.fit$lambda.min, newx=x.test, type='response')
+fitted.results <- ifelse(fitted.results > 0.5, 1, 0)
+
+# Confusion matrix
+confusionMatrix(as.factor(fitted.results), as.factor(y.test))
+```
+
+```{r warning=FALSE, message=FALSE}
+cm <- confusionMatrix(as.factor(fitted.results), as.factor(y.test))
+pacman::p_load(gplots)
+
+# Create the heatmap with numbers
+heatmap.2(as.matrix(cm$table), 
+          xlab = "Predicted", ylab = "Actual", 
+          main = "Confusion Matrix", 
+          col = colorRampPalette(c("#3373a0", "#ffda0a"))(25),
+          trace = "none", # removes the trace lines
+          density.info = "none", # turns off density plot inside color legend
+          dendrogram = "none", # suppresses row dendrogram
+          Rowv = FALSE, Colv = FALSE, # suppresses column dendrogram
+          margins = c(5,5), # sets margins
+          symbreaks = FALSE, # ensures that breaks are at pretty intervals
+          cellnote = cm$table, # same data set for cell labels
+          notecol="black", # change font color of cell labels to black
+          notecex=0.8) # change font size of cell labels
+```
+
+
+1. Accuracy:
+With Feature Selection: 87.42%
+Without Feature Selection: 87.85%
+Discussion: The accuracy is slightly higher without feature selection, but the difference is small. It may indicate that all or most features are relevant, and feature selection did not remove redundant information.
+2. Sensitivity (True Positive Rate):
+With Feature Selection: 97.19%
+Without Feature Selection: 96.93%
+Discussion: Sensitivity is slightly higher with feature selection. This metric shows the ability of the model to correctly identify the positive class (0 in this case), and both models perform similarly in this aspect.
+3. Specificity (True Negative Rate):
+With Feature Selection: 32.86%
+Without Feature Selection: 37.14%
+Discussion: Specificity is slightly higher without feature selection. This metric represents the ability to correctly identify the negative class (1 in this case), and the result without feature selection is slightly better in this respect.
+4. Positive Predictive Value (Precision):
+With Feature Selection: 88.99%
+Without Feature Selection: 89.60%
+Discussion: Precision is slightly higher without feature selection, reflecting a marginally better ability to avoid false-positive predictions.
+5. Negative Predictive Value:
+With Feature Selection: 67.65%
+Without Feature Selection: 68.42%
+Discussion: This metric reflects the ability to avoid false-negative predictions. The result without feature selection is slightly better here as well.
+6. Balanced Accuracy:
+With Feature Selection: 65.02%
+Without Feature Selection: 67.04%
+Discussion: Balanced accuracy takes into account both sensitivity and specificity, and it's higher without feature selection.
+7. Kappa Statistic:
+With Feature Selection: 0.3808
+Without Feature Selection: 0.4194
+Discussion: The Kappa statistic measures the agreement between predicted and actual classifications, adjusted for what would be expected by chance. A higher Kappa indicates better agreement, so the result without feature selection is preferable.
+Overall Discussion:
+Both models perform similarly, with the one without feature selection having a slight edge in most metrics. The slight differences may not be substantial enough to make a strong conclusion about the relative merits of including or excluding feature selection. However, the model without feature selection has a higher Kappa statistic, which indicates better agreement between predicted and actual classifications. This suggests that the model without feature selection is preferable.
+
+
+
+
+**Grid Search**
+```{r warning=FALSE, message=FALSE}
+
+# Grid of hyperparameters
+grid <- expand.grid(alpha = seq(0, 1, by = 0.1), lambda = seq(0.0001, 0.1, by = 0.001))
+
+# Train model with grid search
+cv.fit <- train(x.train, y.train, method = "glmnet", 
+                trControl = trainControl(method = "cv"), 
+                tuneGrid = grid)
+
+# Get best hyperparameters
+best_alpha <- cv.fit$bestTune$alpha
+best_lambda <- cv.fit$bestTune$lambda
+
+# Build the final model with selected hyperparameters
+final.model <- glmnet(x.train, y.train, family="binomial", alpha = best_alpha, lambda = best_lambda)
+
+# Predict using the test data
+fitted.results <- predict(final.model, s=best_lambda, newx=x.test, type='response')
+fitted.results <- ifelse(fitted.results > 0.5, 1, 0)
+
+# Confusion matrix
+confusionMatrix(as.factor(fitted.results), as.factor(y.test))
+
+
+cm <- confusionMatrix(as.factor(fitted.results), as.factor(y.test))
+# Create the heatmap with numbers
+heatmap.2(as.matrix(cm$table), 
+          xlab = "Predicted", ylab = "Actual", 
+          main = "Confusion Matrix", 
+          col = colorRampPalette(c("#3373a0", "#ffda0a"))(25),
+          trace = "none", # removes the trace lines
+          density.info = "none", # turns off density plot inside color legend
+          dendrogram = "none", # suppresses row dendrogram
+          Rowv = FALSE, Colv = FALSE, # suppresses column dendrogram
+          margins = c(5,5), # sets margins
+          symbreaks = FALSE, # ensures that breaks are at pretty intervals
+          cellnote = cm$table, # same data set for cell labels
+          notecol="black", # change font color of cell labels to black
+          notecex=0.8) # change font size of cell labels
+```
+
+**Random Search**
+```{r warning=FALSE, message=FALSE}
+# Random hyperparameters
+set.seed(123)
+random_params <- data.frame(alpha = runif(100, 0, 1), lambda = runif(100, 0.0001, 0.1))
+
+# Train model with random search
+cv.fit <- train(x.train, y.train, method = "glmnet",
+                trControl = trainControl(method = "cv", search = "random"),
+                tuneGrid = random_params)
+
+# Get best hyperparameters
+best_alpha <- cv.fit$bestTune$alpha
+best_lambda <- cv.fit$bestTune$lambda
+
+# Build the final model with selected hyperparameters
+final.model <- glmnet(x.train, y.train, family="binomial", alpha = best_alpha, lambda = best_lambda)
+
+# Predict using the test data
+fitted.results <- predict(final.model, s=best_lambda, newx=x.test, type='response')
+fitted.results <- ifelse(fitted.results > 0.5, 1, 0)
+
+# Confusion matrix
+confusionMatrix(as.factor(fitted.results), as.factor(y.test))
+
+
+cm <- confusionMatrix(as.factor(fitted.results), as.factor(y.test))
+# Create the heatmap with numbers
+heatmap.2(as.matrix(cm$table), 
+          xlab = "Predicted", ylab = "Actual", 
+          main = "Confusion Matrix", 
+          col = colorRampPalette(c("#3373a0", "#ffda0a"))(25),
+          trace = "none", # removes the trace lines
+          density.info = "none", # turns off density plot inside color legend
+          dendrogram = "none", # suppresses row dendrogram
+          Rowv = FALSE, Colv = FALSE, # suppresses column dendrogram
+          margins = c(5,5), # sets margins
+          symbreaks = FALSE, # ensures that breaks are at pretty intervals
+          cellnote = cm$table, # same data set for cell labels
+          notecol="black", # change font color of cell labels to black
+          notecex=0.8) # change font size of cell labels
+```
+
+
+
+
+
+
