@@ -1,0 +1,25 @@
+Data Summary Details
+====================
+
+| Sections                                       | Details                                                                                                    |
+|------------------------------------------------|------------------------------------------------------------------------------------------------------------|
+| BeneID                                         | Unique identifiers for beneficiaries. Categorical variable.                                                |
+| Provider                                       | Unique identifiers for healthcare providers. Categorical variable.                                         |
+| ClaimID                                        | Unique identifiers for claims. Categorical variable.                                                        |
+| ClaimStartDt and ClaimEndDt                    | Start and end dates of claims, ranging from November 27, 2008, to December 31, 2009. Datetime variables.  |
+| InscClaimAmtReimbursed                         | Amount reimbursed for insurance claims. Continuous variable with a range from 0 to 125,000.              |
+| AttendingPhysician                             | Names or identifiers of attending physicians. Categorical variable.                                         |
+| ClmAdmitDiagnosisCode                         | Diagnosis codes related to admission. Categorical variable.                                                 |
+| DeductibleAmtPaid                              | Deductible amount paid, ranging from 0 to 1,068.                                                            |
+| ClmDiagnosisCode_1                            | Additional diagnosis codes with a substantial number of missing values (10,453). Categorical variable.     |
+| PotentialFraud                                 | Binary variable indicating potential fraud (1) or no fraud (0). Not missing.                                |
+| ClaimDuration                                 | Duration of claims, ranging from 0 to 36.                                                                   |
+| DOB                                            | Date of birth of beneficiaries, ranging from January 1, 1909, to December 1, 1983. Datetime variable.     |
+| Gender                                         | Binary variable representing the gender of beneficiaries (0 or 1).                                           |
+| Race                                           | Categorical variable with values 1, 2, 3, or 5.                                                             |
+| RenalDiseaseIndicator                         | Binary variable indicating the presence (1) or absence (0) of renal disease.                                |
+| State                                          | Categorical variable with multiple levels.                                                                  |
+| County                                         | Categorical variable with multiple levels.                                                                  |
+| Chronic Conditions                             | Binary variables indicating the presence or absence of various chronic conditions.                           |
+| IPAnnualReimbursementAmt and IPAnnualDeductibleAmt | Likely annual reimbursement amount and deductible amount for inpatient services.                             |
+| OPAnnualReimbursementAmt and OPAnnualDeductibleAmt | Likely annual reimbursement amount and deductible amount for outpatient services.                            |

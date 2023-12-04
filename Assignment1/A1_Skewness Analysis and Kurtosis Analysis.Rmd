@@ -1,0 +1,31 @@
+Skewness Data Details
+=====================
+
+| Variable               | Skewness Value |
+|------------------------|----------------|
+| InscClaimAmtReimbursed | 9.49           |
+| DeductibleAmtPaid      | 3.33           |
+| ClaimDuration          | 3.16           |
+| IPAnnualReimbursementAmt | 3.99          |
+| IPAnnualDeductibleAmt  | 8.16           |
+| OPAnnualReimbursementAmt | 5.52          |
+| OPAnnualDeductibleAmt  | 4.36           |
+| MissingDiagnosisCode   | 7.10           |
+
+
+Kurtosis Data Details
+=====================
+
+| Variable                  | Kurtosis Value |
+|---------------------------|----------------|
+| InscClaimAmtReimbursed    | 136.58         |
+| DeductibleAmtPaid         | 9.11           |
+| ClaimDuration             | 9.25           |
+| ChronicCond_stroke        | 4.94           |
+| IPAnnualReimbursementAmt  | 23.04          |
+| IPAnnualDeductibleAmt     | 158.20         |
+| OPAnnualReimbursementAmt  | 51.02          |
+| OPAnnualDeductibleAmt     | 26.17          |
+| ClaimDurationSquared      | 26.98          |
+| ClaimDurationStandardized | 9.25           |
+| MissingDiagnosisCode      | 48.42          |
