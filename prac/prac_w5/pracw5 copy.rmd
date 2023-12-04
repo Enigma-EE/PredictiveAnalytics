@@ -1,0 +1,106 @@
+---
+title: |
+  | INFS_SP5_2023
+  | Predictive Analytics
+  | Decision Tree
+author: "Enna H"
+output: 
+  pdf_document:
+    toc: true
+editor_options:
+  chunk_output_type: console
+---
+
+
+
+```{r echo = FALSE, include=FALSE}
+# clear all variables, functions, etc
+# clean up memory
+rm(list=ls())
+# clean up memory
+gc()
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  fig.width = 8, 
+  fig.asp = 0.618, 
+  out.width = "80%",
+  fig.align = "center", 
+  root.dir = "../",
+  message = FALSE,
+  size = "small"
+)
+```
+
+
+```{r warning=FALSE, include=FALSE}
+pacman::p_load(tidyverse)
+pacman::p_load(knitr,dplyr,AICcmodavg)
+pacman::p_load(inspectdf,tidyr,stringr, stringi,DT,mice)
+pacman::p_load(caret,modelr)
+pacman::p_load(mlbench,mplot)
+pacman::p_load(tidymodels,glmx)
+pacman::p_load(skimr,vip,yardstick,ranger,kknn,funModeling,Hmisc)
+pacman::p_load(ggplot2,ggpubr)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+
+```{r warning=FALSE, include=FALSE}
+# Decision tree
+pacman::p_load(rpart.plot)
+
+# Data manipulation
+pacman::p_load(rgl, rattle, mice, dplyr)
+
+# Plotting
+pacman::p_load(viridis, hrbrthemes, ggplot2, heplots, ggpubr)
+```
+
+```{r warning=FALSE}
+# Load data
+data <- read.csv(url("http://bit.ly/infs5100-stroke-data"))
+
+```
+
+```{r warning=FALSE}
+data <- data %>%
+  mutate(
+    across(c(stroke, gender, hypertension, heart_disease, ever_married, 
+              work_type, residence_type, smoking_status), as.factor),
+    bmi = as.numeric(bmi)
+  )
+```
+
+
+
+```{r warning=FALSE}
+# Impute missing values
+data.imputed <- mice(data, m=3, maxit = 50, method = 'pmm', seed = 500)
+summary(data.imputed) # pmm = predictive mean matching
+```
+
+
+```{r warning=FALSE}
+# Obtain a complete dataset
+data.complete <- complete(data.imputed, 1)
+head(data.complete)
+```
+
+
+
+
+```{r warning=FALSE}
+pacman::p_load(GGally)
+```
+
+```{r warning=FALSE}
+ggpairs(data.complete, columns = c(3, 9, 10, 12),
+  ggplot2::aes(colour=stroke), progress = FALSE,
+  lower=list(combo=wrap("facethist", binwidth=0.5)))
+```
+
+

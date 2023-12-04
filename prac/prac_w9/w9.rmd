@@ -1,0 +1,350 @@
+---
+title: |
+  | INFS_SP5_2023
+  | Predictive Analytics
+  | PRACTICAL w9
+author: "Enna H"
+output: 
+  pdf_document:
+    toc: true
+editor_options:
+  chunk_output_type: console
+---
+
+
+
+```{r echo = FALSE, include=FALSE}
+# clear all variables, functions, etc
+# clean up memory
+rm(list=ls())
+# clean up memory
+gc()
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  fig.width = 8, 
+  fig.asp = 0.618, 
+  out.width = "80%",
+  fig.align = "center", 
+  root.dir = "../",
+  message = FALSE,
+  size = "small"
+)
+```
+
+
+```{r warning=FALSE, include=FALSE}
+pacman::p_load(tidyverse, gglm)
+pacman::p_load(knitr,dplyr,AICcmodavg)
+pacman::p_load(inspectdf,tidyr,stringr, stringi,DT)
+pacman::p_load(caret,modelr)
+pacman::p_load(mlbench,mplot)
+pacman::p_load(tidymodels,glmx)
+pacman::p_load(skimr,vip,yardstick,ranger,kknn,funModeling,Hmisc)
+pacman::p_load(ggplot2,ggpubr,ggthemes,gridExtra,scales)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+
+- revisit rule-based classifiers and learn how to build and interpret k-nearest neighbor (KNN) and Naïve Bayes classifiers.  
+
+## Task 1. K-Nearest Neighbor classifier
+
+KNN is a supervised machine learning algorithm that classifies a new data point into the target class, depending on the features of its neighboring data points. It is one of the most simple machine learning algorithms and it can be easily implemented for a varied set of problems. The algorithm is mainly based on feature similarity. That is, KNN checks how similar a data point is to its neighbor and classifies the data point into the class it is most similar to. 
+KNN is a lazy algorithm, this means that it memorizes the training data set instead of learning a discriminative function from the training data. It is applicable in solving both classification and regression problems. 
+
+```{r}
+pacman::p_load(class, caret, mlr3, mlr3learners,mlr3measures,C50)
+```
+
+
+```{r}
+# load data 
+data <- read.csv(url("https://raw.githubusercontent.com/sreckojoksimovic/infs5100/main/wine-data.csv"))
+
+ 
+# There might be a problem with column names, that is why we will assign  
+# column names before going ahead 
+names(data) <- c("fixed_acidity", names(data)[2:12]) 
+ 
+# We should make sure that the output variable is in the right format 
+data$quality_class <- as.factor(data$quality_class) 
+ 
+# Finally, we will summarize dataset 
+summary(data)
+```
+
+- the variables are on different scales. 
+- while the values for density are between 0.990 and 1.004, whereas the range of values for total sulfur dioxide goes between 6 and 289.
+- Being a distance-based algorithm, KNN is affected by the scale of the variables. Similar to K-Means, a commonly used clustering algorithm.
+
+```{r}
+data$fixed_acidity <- scale(data$fixed_acidity, center = TRUE, scale = 
+TRUE)
+data$volatile_acidity <- scale(data$volatile_acidity, center = TRUE, 
+scale = TRUE)
+data$citric_acid <- scale(data$citric_acid, center = TRUE, scale = TRUE)
+data$residual_sugar <- scale(data$residual_sugar, center = TRUE, scale = 
+TRUE)
+data$chlorides <- scale(data$chlorides, center = TRUE, scale = TRUE)
+data$free_sulfur_dioxide <- scale(data$free_sulfur_dioxide, center = 
+TRUE, scale = TRUE)
+data$total_sulfur_dioxide <- scale(data$total_sulfur_dioxide, center = 
+TRUE, scale = TRUE)
+data$density <- scale(data$density, center = TRUE, scale = TRUE)
+data$pH <- scale(data$pH, center = TRUE, scale = TRUE)
+data$sulphates <- scale(data$sulphates, center = TRUE, scale = TRUE)
+data$alcohol <- scale(data$alcohol, center = TRUE, scale = TRUE)
+```
+
+- split the dataset into training and test sets. 
+- As it is commonly used, we will keep 70% for training and 30% for testing.
+
+```{r}
+train.size <- .7
+train.indices <- sample(x = seq(1, nrow(data), by = 1), size = 
+ceiling(train.size * nrow(data)), replace = FALSE)
+wine.data.train <- data[ train.indices, ]
+wine.data.test <- data[ -train.indices, ]
+```
+
+- finding an optimal value for K, the number of neighbors to consider. One way to find an optimal value is to try a range of options. 
+- The code below creates a new Task (as we will be using mlr3 package), prepares a range of K  values to be tested and plots accuracy of the models obtained with different K-values.
+
+```{r}
+wine.task <- TaskClassif$new(id = "wine", backend = wine.data.train, 
+target = "quality_class")
+# run experiment
+k.values <- rev(c(1:10, 15, 20, 25, 30, 35, 40, 45, 50))
+storage <- data.frame(matrix(NA, ncol = 3, nrow = length(k.values)))
+colnames(storage) <- c("acc_train", "acc_test", "k")
+for (i in 1:length(k.values)) {
+ wine.learner <- lrn("classif.kknn", k = k.values[i])
+ wine.learner$train(task = wine.task)
+ # test data
+ # choose additional adequate measures from: mlr3::mlr_measures
+ wine.pred <- wine.learner$predict_newdata(newdata = wine.data.test)
+ storage[i, "acc_test"] <- wine.pred$score(msr("classif.acc"))
+ # train data
+ wine.pred <- wine.learner$predict_newdata(newdata = wine.data.train)
+ storage[i, "acc_train"] <- wine.pred$score(msr("classif.acc"))
+ storage[i, "k"] <- k.values[i]
+}
+```
+
+```{r}
+storage <- storage[rev(order(storage$k)), ]
+plot(
+ x = storage$k, y = storage$acc_train, main = "Overfitting behavior 
+KNN",
+ xlab = "k - the number of neighbors to consider", ylab = "accuracy", 
+col = "blue", type = "l",
+ xlim = rev(range(storage$k)),
+ ylim = c(
+ min(storage$acc_train, storage$acc_test),
+ max(storage$acc_train, storage$acc_test)
+ ),
+ log = "x"
+)
+lines(x = storage$k, y = storage$acc_test, col = "orange")
+legend("topleft", c("test", "train"), col = c("orange", "blue"), lty = 
+1)
+```
+
+-  for smaller values of K (less than 10), the obtained models tend to overfit the data. It seems, from the plot above, that value of 30 is the optimal value for the number of neighbors to consider. 
+
+```{r}
+# Fit KNN with K=30
+wine.learner.knn <- lrn("classif.kknn", k = 30)
+wine.learner.knn$train(task = wine.task)
+wine.pred.knn <- wine.learner.knn$predict_newdata(newdata = wine.data.test)
+knn.results = confusionMatrix(table(predicted = wine.pred.knn$response, 
+ actual = wine.data.test$quality_class))
+knn.results
+```
+
+## Task 2. Naïve Bayes classifier
+
+- The Naïve Bayes classifier is a simple probabilistic classifier which is based on Bayes theorem. 
+- This technique became popular with applications in email filtering, and spam detection, among other similar problems. Despite the naïve design and oversimplified assumptions, this classifier can perform well in many real-world problems. 
+
+```{r}
+# Fit a Naïve Bayes classifier
+wine.learner.nb <- lrn("classif.naive_bayes")
+wine.learner.nb$train(task = wine.task)
+wine.pred.nb <- wine.learner.nb$predict_newdata(newdata = wine.data.test)
+nb.results = confusionMatrix(table(predicted = wine.pred.nb$response, 
+ actual = wine.data.test$quality_class))
+nb.results
+```
+
+- Although the accuracy is somewhat lower in this case (compared to KNN), Kappa is considerably higher in the case of Naïve Bayes classifier, having a value of 0.51. 
+
+## Task 3. Rule-based classifier
+
+```{r}
+rule.class <- C5.0(x = wine.data.train[,-12], y = 
+wine.data.train$quality_class, rules = TRUE)
+```
+
+```{r}
+summary(rule.class)
+```
+
+- run confusionMatrix() to get the model parameters.
+
+
+```{r}
+wine.pred.rule <- predict(rule.class, newdata = wine.data.test)
+rule.results = confusionMatrix(table(predicted = wine.pred.rule, 
+ actual = wine.data.test$quality_class))
+rule.results
+```
+
+Which of the classifiers showed the best performance in this case?
+Can you comment on the confusion matrix for each of the examples? Which classifier has the lowest number of false positives and false negatives?
+
+### Key Metrics in Classifiers
+
+Confusion matrix-based metrics are crucial for understanding the performance of classification models. Important metrics include Accuracy, Sensitivity (True Positive Rate), Specificity (True Negative Rate), Positive Predictive Value (Precision), and Negative Predictive Value. Kappa measures the agreement between prediction and observation. The P-value in McNemar's test gives an idea of the statistical significance of the difference between the classifiers. Balanced Accuracy is the average of Sensitivity and Specificity, and it gives a balanced view of the performance on each class.
+
+### Performance Comparison
+
+#### K-Nearest Neighbor (KNN)
+- **Accuracy**: 0.8652, **Kappa**: 0.3391, **Sensitivity**: 0.9692, **Specificity**: 0.2958
+- High Sensitivity but low Specificity. High number of False Positives (50).
+
+#### Naïve Bayes (NB)
+- **Accuracy**: 0.8522, **Kappa**: 0.5123, **Sensitivity**: 0.8766, **Specificity**: 0.7183
+- Moderate Sensitivity and Specificity. Fewer False Positives (20) but more False Negatives (48).
+
+#### Rule-based Classifier
+- **Accuracy**: 0.8891, **Kappa**: 0.5409, **Sensitivity**: 0.9512, **Specificity**: 0.5493
+- Highest Accuracy and Kappa. Lower False Positives (32) and False Negatives (19).
+
+### Best Performance
+Based on the metrics, the Rule-based Classifier shows the best performance in terms of highest Accuracy (0.8891) and Kappa (0.5409). It also has the highest Balanced Accuracy (0.7502).
+
+### Lowest Number of False Positives and False Negatives
+Naïve Bayes has the lowest number of False Positives (20), while Rule-based has the lowest number of False Negatives (19).
+
+
+### Overfitting Concerns
+
+1. **Model Complexity**: Rule-based classifiers are generally interpretable and less prone to overfitting compared to complex models like deep learning algorithms. However, if the rules are too fine-grained, it might overfit to the training data.
+2. **Validation Technique**: Without details about the validation technique used (e.g., cross-validation), it's difficult to definitively comment on the risk of overfitting.
+3. **Sample Size**: If the model was trained on a large and diverse dataset, the risk of overfitting decreases.
+
+### Recommendations
+
+1. **Cross-Validation**: Implement k-fold cross-validation to evaluate the model's performance across different subsets of data.
+2. **Regularization Techniques**: If the rule-based model allows for it, consider regularization techniques to minimize overfitting.
+3. **Monitor Performance**: Continuously evaluate the model on new, unseen data to check if the performance metrics remain consistent.
+
+
+## Add feature selection to the pipeline outlined
+
+Using Base R for Feature Selection with Recursive Feature Elimination (RFE):
+
+```{r}
+library(caret)
+ctrl <- rfeControl(functions = rfFuncs, method = "cv", number = 10)
+results <- rfe(wine.data.train[,-12], wine.data.train$quality_class, sizes = c(1:11), rfeControl = ctrl)
+optimal_features <- predictors(results)
+wine.data.train_filtered <- wine.data.train[, c(optimal_features, "quality_class")]
+wine.data.test_filtered <- wine.data.test[, c(optimal_features, "quality_class")]
+```
+
+
+
+### Update the Task with Feature-Selected Data:
+
+```{r}
+wine.task <- TaskClassif$new(id = "wine_filtered", backend = wine.data.train_filtered, 
+target = "quality_class")
+```
+
+### Adapt the K-NN Experiment Code:
+
+```{r}
+# Initialize the storage dataframe
+storage <- data.frame(matrix(NA, ncol = 3, nrow = length(k.values)))
+colnames(storage) <- c("acc_train", "acc_test", "k")
+
+# Run experiment with different k values
+for (i in 1:length(k.values)) {
+  wine.learner <- lrn("classif.kknn", k = k.values[i])
+  wine.learner$train(task = wine.task)  # Make sure you're using the updated task
+  # Testing accuracy
+  wine.pred <- wine.learner$predict_newdata(newdata = wine.data.test_filtered)
+  storage[i, "acc_test"] <- wine.pred$score(msr("classif.acc"))
+  # Training accuracy
+  wine.pred <- wine.learner$predict_newdata(newdata = wine.data.train_filtered)
+  storage[i, "acc_train"] <- wine.pred$score(msr("classif.acc"))
+  storage[i, "k"] <- k.values[i]
+}
+```
+
+
+### Adapt the Final K=30 K-NN Model:
+
+```{r}
+# Fit KNN with K=30 on filtered features
+wine.learner.knn <- lrn("classif.kknn", k = 30)
+wine.learner.knn$train(task = wine.task)  # Using updated task
+wine.pred.knn <- wine.learner.knn$predict_newdata(newdata = wine.data.test_filtered)
+knn.results <- confusionMatrix(table(predicted = wine.pred.knn$response, 
+actual = wine.data.test_filtered$quality_class))
+```
+
+```{r}
+# Fit KNN with K=30
+wine.learner.knn <- lrn("classif.kknn", k = 30)
+wine.learner.knn$train(task = wine.task)
+wine.pred.knn <- wine.learner.knn$predict_newdata(newdata = wine.data.test)
+knn.results = confusionMatrix(table(predicted = wine.pred.knn$response, 
+ actual = wine.data.test$quality_class))
+knn.results
+```
+
+
+### Adapt the Naïve Bayes Model:
+
+
+### Update the Task with Feature-Selected Data:
+
+```{r}
+wine.task_filtered <- TaskClassif$new(id = "wine_filtered", backend = wine.data.train_filtered, target = "quality_class")
+```
+
+### Adapt the Naïve Bayes Classifier:
+
+```{r}
+# Fit a Naïve Bayes classifier using filtered features
+wine.learner.nb <- lrn("classif.naive_bayes")
+wine.learner.nb$train(task = wine.task_filtered)  # Using updated task with filtered features
+wine.pred.nb <- wine.learner.nb$predict_newdata(newdata = wine.data.test_filtered)
+nb.results <- confusionMatrix(table(predicted = wine.pred.nb$response, 
+actual = wine.data.test_filtered$quality_class))
+```
+
+```{r}
+# print confusion matrix
+nb.results
+```
+
+### Adapt the Rule-Based Classifier:
+
+```{r}
+# Fit a rule-based classifier using filtered features
+rule.class <- C5.0(x = wine.data.train_filtered[,-11], y = wine.data.train_filtered$quality_class, rules = TRUE)
+```
+
+```{r}
+# print summary
+rule.results
+```
+

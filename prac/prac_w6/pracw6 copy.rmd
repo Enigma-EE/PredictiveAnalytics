@@ -1,0 +1,367 @@
+---
+title: |
+  | INFS_SP5_2023
+  | Predictive Analytics
+  | PRACTICAL 6
+author: "Enna H"
+output: 
+  pdf_document:
+    toc: true
+editor_options:
+  chunk_output_type: console
+---
+
+
+
+```{r echo = FALSE, include=FALSE}
+# clear all variables, functions, etc
+# clean up memory
+rm(list=ls())
+# clean up memory
+gc()
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  fig.width = 8, 
+  fig.asp = 0.618, 
+  out.width = "80%",
+  fig.align = "center", 
+  root.dir = "../",
+  message = FALSE,
+  size = "small"
+)
+```
+
+
+```{r warning=FALSE, include=FALSE}
+pacman::p_load(tidyverse, gglm)
+pacman::p_load(knitr,dplyr,AICcmodavg)
+pacman::p_load(inspectdf,tidyr,stringr, stringi,DT)
+pacman::p_load(caret,modelr)
+pacman::p_load(mlbench,mplot)
+pacman::p_load(tidymodels,glmx)
+pacman::p_load(skimr,vip,yardstick,ranger,kknn,funModeling,Hmisc)
+pacman::p_load(ggplot2,ggpubr,ggthemes,gridExtra,scales)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+
+```{r warning=FALSE, message=FALSE}
+# Load libraries
+pacman::p_load(pscl, ROCR, glmnet,mice,rpart,pROC)
+# for cross validation
+pacman::p_load(caret,rpart.plot)
+```
+
+### Task 2. Building decision tree and calculating accuracy, precision, recall, and F1 score
+
+
+```{r}
+# Load data
+data <- read.csv(url("http://bit.ly/infs5100-stroke-data"))
+nrow(data)
+ncol(data)
+head(data)
+```
+
+```{r}
+# Set variable types
+data$stroke <- as.factor(data$stroke)
+data$gender <- as.factor(data$gender)
+data$hypertension <- as.factor(data$hypertension)
+data$heart_disease <- as.factor(data$heart_disease)
+data$ever_married <- as.factor(data$ever_married)
+data$work_type <- as.factor(data$work_type)
+data$residence_type <- as.factor(data$residence_type)
+data$smoking_status <- as.factor(data$smoking_status)
+data$bmi <- as.numeric(data$bmi)
+```
+
+
+```{r}
+# Impute missing BMI values
+data.imputed <- mice(data, m=3, maxit = 50, method = 'pmm', seed = 500,
+printFlag = FALSE)
+data.complete <- complete(data.imputed, 1)
+```
+
+```{r}
+# Create training and test sets
+set.seed(1000)
+data.class <- data.complete[, c(-1)]
+train_index <- sample(1:nrow(data.class), 0.8 * nrow(data.class))
+test_index <- setdiff(1:nrow(data.class), train_index)
+train <- data.class[train_index,]
+test <- data.class[test_index,]
+list( train = summary(train), test = summary(test) )
+```
+
+
+```{r}
+# Build full decision tree
+c.tree.full <- rpart(stroke ~ ., train, method = "class", cp=0)
+```
+
+```{r}
+# Prune decision tree
+p.tree.prune <- prune(c.tree.full, cp=
+c.tree.full$cptable[which.min(c.tree.full$cptable[,"xerror"]),"CP"])
+# Make a prediction
+stroke.predict <- predict(p.tree.prune, test, type = "class")
+# Print confusion matrix
+table(stroke.predict, test$stroke)
+```
+
+
+
+
+
+
+Using the confusion matrix provided, we can calculate the following metrics:
+### (a) Accuracy
+
+The formula for accuracy is given by:
+
+\[
+\text{Accuracy} = \frac{(TP + TN)}{(TP + TN + FP + FN)}
+\]
+
+Substituting the values from the confusion matrix, we get:
+
+\[
+\text{Accuracy} = \frac{(56 + 92)}{(56 + 92 + 25 + 20)} = \frac{148}{193} \approx 0.7668 \, (\text{or 76.68\%})
+\]
+
+### (b) Precision
+
+The formula for precision is given by:
+
+\[
+\text{Precision} = \frac{TP}{(TP + FP)}
+\]
+
+Substituting the values from the confusion matrix, we get:
+
+\[
+\text{Precision} = \frac{56}{(56 + 25)} = \frac{56}{81} \approx 0.6914 \, (\text{or 69.14\%})
+\]
+
+### (c) Recall
+
+The formula for recall is given by:
+
+\[
+\text{Recall} = \frac{TP}{(TP + FN)}
+\]
+
+Substituting the values from the confusion matrix, we get:
+
+\[
+\text{Recall} = \frac{56}{(56 + 20)} = \frac{56}{76} \approx 0.7368 \, (\text{or 73.68\%})
+\]
+
+### (d) F1 Score
+
+The formula for the F1 score is given by:
+
+\[
+\text{F1 Score} = 2 \times \frac{(Precision \times Recall)}{(Precision + Recall)}
+\]
+
+Substituting the calculated values for precision and recall, we get:
+
+\[
+\text{F1 Score} = 2 \times \frac{(0.6914 \times 0.7368)}{(0.6914 + 0.7368)} \approx 2 \times \frac{0.5096}{1.4282} \approx 0.7134 \, (\text{or 71.34\%})
+\]
+
+
+### Task 3. The ROC curve
+
+```{r}
+# Calculating and plotting ROC
+prob.stroke = predict(p.tree.prune, newdata = test, type = "prob")[,2]
+res.roc <- roc(test$stroke, prob.stroke)
+plot.roc(res.roc, print.auc = TRUE)
+```
+
+- we use type = “prob” to obtain a matrix of class probabilities, instead of predicted values as we did previously.
+- We can notice here that ROC is expressed as the ratio between sensitivity and specificity. The gray diagonal line represents a classifier no better than random chance. A highly performant classifier will have an ROC that rises steeply to the top-left corner, that is it will correctly identify lots of positives without misclassifying lots of negatives as positives.
+- In our case, the AUC is 0.784, which is much better than random chance, suggesting that we managed to build a very good classifier
+
+We can also add the best threshold with the highest sum between sensitivity and specificity:
+
+```{r}
+# Adding the best threshold value
+plot.roc(res.roc, print.auc = TRUE, print.thres = "best")
+```
+
+
+
+#### Task 4. Cross validation
+
+- cross validation is a resampling approach that enables us to obtain a generalizable and more honest error rate estimate.
+
+- configure caret to run 10-fold cross validation
+
+```{r}
+# Configure caret to run 10-fold cross validation
+cv.control <- trainControl(method = "cv", number = 10)
+```
+
+-  build a decision tree using those parameters.
+
+```{r}
+# Use caret to train the rpart decision tree using 10-fold cross
+# validation and use 15 values for tuning the cp parameter for rpart.
+# This code returns the best model.
+rpart.cv <- train(stroke ~ .,
+            data = train,
+            method = "rpart",
+            trControl = cv.control,
+            tuneLength = 15)
+rpart.cv
+```
+
+
+- Compared to the example above, here we are using 15 values for cp parameter tunning (compared to one above), in which case we should obtain the best performing tree for this dataset
+- The output shows that the best model was obtained for cp = 0.02961121.
+
+```{r}
+# Plot model selection
+plot(rpart.cv)
+```
+
+Compared to the accuracy you calculated in Task 2, does model obtained using cross
+validation and parameter tunning performs better?
+- cross validation and parameter tunning
+cp          Accuracy   Kappa
+0.02961121  0.7871878  0.5677600
+
+- Task 2 decision tree
+Accuracy   0.7668
+
+- The accuracy is slightly better for the cross validation and parameter tunning model, but not by much. The kappa value is also higher for the cross validation and parameter tunning model, which is a better indicator of model performance than accuracy.
+
+
+### **Challenge 2.** Calculate confidence intervals for accuracy, after doing cross-validation, for:
+- 95% confidence, and
+- 98% confidence
+
+```{r}
+# Extract resampling results
+resample_results <- rpart.cv$resample
+
+# Calculate 95% confidence interval
+confidence_95 <- t.test(resample_results$Accuracy, conf.level = 0.95)$conf.int
+
+# Calculate 98% confidence interval
+confidence_98 <- t.test(resample_results$Accuracy, conf.level = 0.98)$conf.int
+
+# Print the confidence intervals
+print("95% Confidence Interval:")
+print(confidence_95)
+print("98% Confidence Interval:")
+print(confidence_98)
+```
+
+
+
+
+### **Challenge 1**
+
+Please go ahead and use two additional configurations: 
+- (i) 70/30 training and test split; and
+- (ii) 60/40 training and test split.
+How this changes the Accuracy, Precision, Recall, and F1 scores that you previously
+calculated?
+```{r}
+# Create training and test sets with 80/20 split (original configuration)
+set.seed(1000)
+data.class <- data.complete[, c(-1)]
+train_index <- sample(1:nrow(data.class), 0.8 * nrow(data.class))
+test_index <- setdiff(1:nrow(data.class), train_index)
+train <- data.class[train_index,]
+test <- data.class[test_index,]
+list(train_80_20 = summary(train), test_80_20 = summary(test))
+
+# Build, prune decision tree and print confusion matrix for 80/20 split
+c.tree.full <- rpart(stroke ~ ., train, method = "class", cp=0)
+p.tree.prune <- prune(c.tree.full, cp=c.tree.full$cptable[which.min(c.tree.full$cptable[,"xerror"]),"CP"])
+stroke.predict <- predict(p.tree.prune, test, type = "class")
+table_80_20 <- table(stroke.predict, test$stroke)
+```
+
+```{r}
+# Configuration (i): 70/30 training and test split
+train_index <- sample(1:nrow(data.class), 0.7 * nrow(data.class))
+test_index <- setdiff(1:nrow(data.class), train_index)
+train <- data.class[train_index,]
+test <- data.class[test_index,]
+list(train_70_30 = summary(train), test_70_30 = summary(test))
+
+# Build, prune decision tree and print confusion matrix for 70/30 split
+c.tree.full <- rpart(stroke ~ ., train, method = "class", cp=0)
+p.tree.prune <- prune(c.tree.full, cp=c.tree.full$cptable[which.min(c.tree.full$cptable[,"xerror"]),"CP"])
+stroke.predict <- predict(p.tree.prune, test, type = "class")
+table_70_30 <- table(stroke.predict, test$stroke)
+```
+
+```{r}
+# Configuration (ii): 60/40 training and test split
+train_index <- sample(1:nrow(data.class), 0.6 * nrow(data.class))
+test_index <- setdiff(1:nrow(data.class), train_index)
+train <- data.class[train_index,]
+test <- data.class[test_index,]
+list(train_60_40 = summary(train), test_60_40 = summary(test))
+
+# Build, prune decision tree and print confusion matrix for 60/40 split
+c.tree.full <- rpart(stroke ~ ., train, method = "class", cp=0)
+p.tree.prune <- prune(c.tree.full, cp=c.tree.full$cptable[which.min(c.tree.full$cptable[,"xerror"]),"CP"])
+stroke.predict <- predict(p.tree.prune, test, type = "class")
+table_60_40 <- table(stroke.predict, test$stroke)
+```
+
+```{r}
+# Print all confusion matrices
+list(confusion_matrix_80_20 = table_80_20, confusion_matrix_70_30 = table_70_30, confusion_matrix_60_40 = table_60_40)
+```
+
+
+#### Calculations
+
+Using the confusion matrices, we can calculate the metrics as follows:
+
+#### 80/20 Split
+- **Accuracy**: \(\frac{(92 + 56)}{(92 + 56 + 25 + 20)} \approx 0.7668\) (or 76.68%)
+- **Precision**: \(\frac{56}{(56 + 25)} \approx 0.6914\) (or 69.14%)
+- **Recall**: \(\frac{56}{(56 + 20)} \approx 0.7368\) (or 73.68%)
+- **F1 Score**: \(2 \times \frac{(0.6914 \times 0.7368)}{(0.6914 + 0.7368)} \approx 0.7134\) (or 71.34%)
+
+#### 70/30 Split
+- **Accuracy**: \(\frac{(123 + 89)}{(123 + 89 + 52 + 26)} \approx 0.7522\) (or 75.22%)
+- **Precision**: \(\frac{89}{(89 + 52)} \approx 0.6311\) (or 63.11%)
+- **Recall**: \(\frac{89}{(89 + 26)} \approx 0.7736\) (or 77.36%)
+- **F1 Score**: \(2 \times \frac{(0.6311 \times 0.7736)}{(0.6311 + 0.7736)} \approx 0.6944\) (or 69.44%)
+
+#### 60/40 Split
+- **Accuracy**: \(\frac{(156 + 136)}{(156 + 136 + 79 + 15)} \approx 0.7524\) (or 75.24%)
+- **Precision**: \(\frac{136}{(136 + 79)} \approx 0.6327\) (or 63.27%)
+- **Recall**: \(\frac{136}{(136 + 15)} \approx 0.9007\) (or 90.07%)
+- **F1 Score**: \(2 \times \frac{(0.6327 \times 0.9007)}{(0.6327 + 0.9007)} \approx 0.7447\) (or 74.47%)
+
+### Implications
+
+1. **Accuracy**: The accuracy remains relatively stable across the different splits, indicating that the model maintains a consistent level of overall correctness.
+   
+2. **Precision**: The precision decreases as the training set size decreases. This implies that the model identifies more false positives in the 60/40 and 70/30 splits compared to the 80/20 split.
+   
+3. **Recall**: The recall increases significantly in the 60/40 split, indicating that the model identifies a higher proportion of actual positives correctly, but at the expense of a higher false positive rate (as seen in the precision).
+   
+4. **F1 Score**: The F1 score, which balances precision and recall, is highest in the 60/40 split, suggesting that this split might provide a better harmonic mean of precision and recall compared to the other splits.
+
+##### Conclusion
+
+The results imply that the 60/40 split, despite having a lower precision, manages to achieve a higher recall and F1 score, indicating a better balance between identifying true positives and avoiding false negatives. However, the choice of split ratio should depend on the specific context and objectives of your analysis, considering whether precision or recall is more important for your particular case.

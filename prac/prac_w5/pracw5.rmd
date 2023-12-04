@@ -1,0 +1,472 @@
+---
+title: |
+  | INFS_SP5_2023
+  | Predictive Analytics
+  | Decision Tree
+author: "Enna H"
+output: 
+  pdf_document:
+    toc: true
+editor_options:
+  chunk_output_type: console
+---
+
+
+
+```{r echo = FALSE, include=FALSE}
+# clear all variables, functions, etc
+# clean up memory
+rm(list=ls())
+# clean up memory
+gc()
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  fig.width = 8, 
+  fig.asp = 0.618, 
+  out.width = "80%",
+  fig.align = "center", 
+  root.dir = "../",
+  message = FALSE,
+  size = "small"
+)
+```
+
+
+```{r warning=FALSE, include=FALSE}
+pacman::p_load(tidyverse)
+pacman::p_load(knitr,dplyr,AICcmodavg)
+pacman::p_load(inspectdf,tidyr,stringr, stringi,DT,mice)
+pacman::p_load(caret,modelr)
+pacman::p_load(mlbench,mplot)
+pacman::p_load(tidymodels,glmx)
+pacman::p_load(skimr,vip,yardstick,ranger,kknn,funModeling,Hmisc)
+pacman::p_load(ggplot2,ggpubr,GGally)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+
+
+Objectives
+
+• Load and explore data.
+
+• Build a decision tree.
+
+• Create a fully grown tree.
+
+• Prune the decision tree.
+
+• Make a prediction using the model.
+
+
+Datasets
+
+In this practical, we will be using a dataset that was derived from the Kaggle Stroke Prediction Dataset (https://www.kaggle.com/fedesoriano/stroke-prediction-dataset). To obtain a dataset for this practical, we applied a function that implements synthetic minority over-sampling technique (SMOTE).
+
+\newpage
+
+# Load and explore data
+
+```{r warning=FALSE, include=FALSE}
+# Decision tree
+pacman::p_load(rpart.plot)
+
+# Data manipulation
+pacman::p_load(rgl, rattle, mice, dplyr, tidyverse)
+
+# Plotting
+pacman::p_load(viridis, hrbrthemes, ggplot2, heplots, ggpubr, forcats)
+```
+
+```{r warning=FALSE}
+# Load data
+data <- read.csv(url("http://bit.ly/infs5100-stroke-data"))
+nrow(data)
+names(data)
+head(data)
+```
+
+```{r warning=FALSE}
+data <- data %>%
+  mutate(
+    across(c(stroke, gender, hypertension, heart_disease, ever_married, 
+              work_type, residence_type, smoking_status), as.factor),
+    bmi = as.numeric(bmi)
+  )
+summary(data)
+```
+
+There are several important things you should notice here. The dataset seems to be very close to being balanced, given that we have 572 cases who did not have a stroke and 392 cases with stroke. What is also interesting is that we have 66 missing data points in the bmi column, that we will impute like we did in the previous practical.
+
+# Missing values
+
+```{r warning=FALSE, message=FALSE,echo=TRUE, results='hide'}
+# Impute missing values
+data.imputed <- mice(data, m=3, maxit = 50, method = 'pmm', seed = 500)
+```
+
+```{r warning=FALSE, message=FALSE}
+summary(data.imputed) # pmm = predictive mean matching
+```
+
+```{r warning=FALSE}
+# Obtain a complete dataset
+data.complete <- complete(data.imputed, 1)
+head(data.complete)
+```
+
+Make sure you run summary as well and compare with the summary you run on the original data.
+You should notice that there are no more missing values in BMI variable. However, mean and median values should be similar to the original dataset.
+
+```{r warning=FALSE}
+summary(data.complete)
+```
+
+# Data exploration
+
+This part requires a bit of preprocessing as we want to show histograms for age, avg_glucose_level, and bmi on a single plot. 
+
+The easiest way to do that is to convert our data from wide to long format.
+
+```{r warning=FALSE}
+data.num.long <- gather(data.complete[, c(1, 3, 9, 10)], metric, value,
+age:bmi, factor_key=TRUE)
+View(data.num.long)
+```
+
+What happened here?
+• We selected required columns, id, age, avg_glucose_level, and bmi from the
+original dataset
+• The new dataset - data.num.long, will have two new columns, metric and value.
+• The metric column will have values “age”, “avg_glucose_level”, and “bmi”. Whereas
+value will contain values for the given row.
+
+```{r warning=FALSE}
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# Your plotting code
+num.plot <- data.num.long %>%
+  ggplot(aes(x=value, fill=metric)) +
+  geom_histogram(alpha=0.6, binwidth = 5) +
+  scale_fill_brewer(palette="Set1") +
+  theme_minimal() +
+  theme(
+    legend.position="none",
+    panel.spacing = unit(0.1, "lines"),
+    strip.text.x = element_text(size = 8)
+  ) +
+  xlab("") +
+  ylab("Metric values") +
+  facet_wrap(~metric)
+num.plot
+
+
+```
+
+pacman::p_load(devtools)
+
+
+```{r warning=FALSE}
+ggpairs(data.complete, columns = c(3, 9, 10, 12),
+  ggplot2::aes(colour=stroke), progress = FALSE,
+  lower=list(combo=wrap("facethist", binwidth=0.5)))
+```
+
+
+
+- Age: Age of the patient
+- Average Glucose Level: Average level of glucose in the blood
+- BMI: Body Mass Index
+
+Upon examining the plot, we can analyze the relationships and correlations among the numerical variables (age, average glucose level, and BMI) with respect to the target variable (stroke).
+
+### Analysis of Numerical Variables
+
+#### Age
+- Observing the relationship between age and stroke, we may notice a pattern indicating that the probability of having a stroke increases with age.
+- This variable is likely to be a significant predictor.
+
+#### Average Glucose Level
+- The relationship between the average glucose level and stroke might show some correlation, but it may not be as strong as age.
+- It's common in medical studies to consider glucose levels as a potential risk factor for various health conditions, including stroke.
+- It might be reasonable to keep this variable in the model.
+
+#### BMI (Body Mass Index)
+- The correlation between BMI and stroke may be less clear from the plot.
+- BMI is often considered in health studies as it can be related to overall health, but its direct connection to stroke may not be strongly evident in this data.
+- Further statistical tests might be required to ascertain the significance of this variable.
+
+### Conclusion
+
+Based on the visual analysis:
+- The variables "age" and "average glucose level" should likely be retained in the model, as they appear to have some correlation with the occurrence of a stroke.
+- The variable "BMI" might require further investigation. Depending on the context of the study, statistical tests, and considering domain knowledge, a decision could be made to either include or exclude it.
+
+It is essential to consider the correlation analysis as a preliminary step. Further statistical analysis, model testing, and validation would provide more robust insights into the significance and relevance of these variables. Conducting feature importance analysis during model training could also aid in making the final decision on variable inclusion or exclusion.
+
+
+### Analysis of the Categorical Variables
+
+```{r warning=FALSE}
+ggpairs(data.complete, columns = c(2, 4, 5, 6), ggplot2::aes(colour=stroke),
+progress = FALSE)
+```
+
+
+
+
+#### Plot 1:
+
+- Gender
+- Hypertension
+- Heart Disease
+- Ever Married
+
+Upon examining the first plot, we can analyze the relationships and associations among the categorical variables (gender, hypertension, heart disease, ever married) with respect to the target variable (stroke).
+
+#### Gender
+- The distribution of strokes may differ slightly between genders. Understanding if there's a significant difference might require statistical testing.
+
+#### Hypertension
+- The presence of hypertension (value 1) seems to be associated with a higher occurrence of strokes. This indicates that hypertension might be a significant factor in predicting strokes.
+
+#### Heart Disease
+- Similar to hypertension, having heart disease (value 1) could be correlated with a higher likelihood of strokes. Heart disease is a known risk factor for stroke and might be an essential variable in the model.
+
+#### Ever Married
+- The relationship between marital status and stroke might not be as apparent. Further exploration and domain knowledge might be required to interpret this association.
+
+
+
+```{r warning=FALSE}
+ggpairs(data.complete, columns = c(7, 8, 11), ggplot2::aes(colour=stroke),
+progress = FALSE)
+```
+
+
+### Plot 2: 
+
+- Work Type
+- Residence Type
+- Smoking Status
+
+
+Upon examining the second plot, we can analyze the relationships and associations among the categorical variables (work type, residence type, smoking status) with respect to the target variable (stroke).
+
+#### Work Type
+- Different work types may show varying degrees of association with stroke occurrence. For example, the "Self-employed" or "Govt_job" categories might have different implications for stroke risk, depending on lifestyle factors.
+- Interpretation of this variable might require domain expertise related to occupation and health.
+
+#### Residence Type
+- The plot may not reveal a clear distinction between "Rural" and "Urban" residence types in terms of stroke occurrence. The relevance of this variable might need further investigation.
+
+#### Smoking Status
+- Smoking status can be a significant health-related variable. The categories "formerly smoked" and "smokes" might show higher occurrences of strokes compared to "never smoked."
+- "Unknown" category may require special consideration, as missing data might affect the interpretation.
+
+### Conclusion
+
+The visual analysis of categorical variables provides insights into potential associations with stroke occurrence:
+- Variables like hypertension, heart disease, and smoking status appear to have a meaningful association with stroke and should likely be considered in the predictive model.
+- Other variables like gender, work type, and residence type may require further analysis, domain knowledge, and possibly statistical testing to ascertain their relevance.
+
+Visualizations provide valuable preliminary insights, but further modeling, statistical analysis, and validation are essential to fully understand the relationships and make informed decisions about variable inclusion or exclusion in the predictive model.
+
+
+
+# Decision Tree
+
+we will delete id column, as we will not be using it in predictions.
+Additionally, we will again set seed as partitioning dataset is a random process and we want to
+be able to replicate our results.
+
+```{r warning=FALSE}
+data.class <- data.complete[, c(-1)]
+set.seed(1000)
+```
+
+```{r warning=FALSE}
+train_index <- sample(1:nrow(data.class), 0.8 * nrow(data.class))
+test_index <- setdiff(1:nrow(data.class), train_index)
+train <- data.class[train_index,]
+test <- data.class[test_index,]
+list(train = summary(train), test = summary(test))
+```
+
+```{r warning=FALSE}
+# Fitting a decision tree
+c.tree <- rpart(stroke ~ ., train, method = "class")
+```
+
+Here is the outline of the arguments we used:
+• stroke ~ . tells the method to build a decision tree that will predict stroke using all
+the available features (“.”). You can also specify a subset of features using the following
+notation stroke ~ age + bmi.
+• train is our training set.
+• method = “class” is used because we are predicting categorical variable (stroke).
+Other options would be “anova”, “poisson”, or “exp”. If method is missing then the
+routine tries to make an intelligent guess. If y is a survival object, then method = “exp” is
+assumed, if y has 2 columns then method = “poisson” is assumed, if y is a factor then, as
+in our case, method = “class” is assumed, otherwise method = “anova” is assumed. It is
+good practice to specify the method directly, especially as more criteria may added to the
+function in future.
+• Recall that we discussed three measures for selecting the best split. Default measure for
+rpart is Gini. We can also set Entropy (Please refer to the documentation for this
+method).
+
+```{r warning=FALSE}
+# Printing the tree
+print(c.tree)
+```
+
+```{r warning=FALSE}
+# Plot the tree
+fancyRpartPlot(c.tree, palettes = c("Greens", "Reds"), sub = "")
+```
+
+
+things to note here:
+• The splitting rules are created starting with the variables that has the highest association
+with the response variable - avg_glucose_level in this case.
+• Node purity - each node has two proportions written left and right. The leftmost leaf has
+.90 and .10, meaning that 90% of the node belongs to the predicted class - 0, i.e., no
+stroke.
+• Sample proportion - each node also has a proportion of the sample. For the leftmost
+node - 43% of the sample belongs to this node.
+• Predicted class - finally, each node also has a predicted class (0 - no stroke for the
+leftmost node).
+
+
+As we discussed in the lecture, there are exponentially many ways to build a decision tree. The
+tree we have above is not a fully grown decision tree. If we look at the documentation for
+rpart, we will see that the default value for the complexity parameter (i.e., cp) is 0.05. This
+ensures that decision tree does not include any split that does not decrease the overall lack of fit by a factor of 5%.
+
+```{r warning=FALSE}
+# Fit the fully grown tree
+c.tree.full <- rpart(stroke ~ ., train, method = "class", cp=0)
+fancyRpartPlot(c.tree.full, palettes = c("Greens", "Reds"), sub = "")
+```
+
+The fully grown tree adds two all the predictors to the model. Although there is no rule of thumb
+how to set the complexity parameter, there are two things we should be aware of:
+• A large tree is likely to overfit the data.
+• A small tree might miss important parameters and thus might lead to a model with high
+bias.
+
+# Pruning the decision tree
+
+An optimal tree size can be selected adaptively from the training data. What we usually do is to build a fully-grown decision tree and then extract a nested sub-tree (prune it) in a way that gives us the tree that has the minimal node impurities.
+
+```{r warning=FALSE}
+# Select the best complexity parameter
+min.cp <-
+c.tree.full$cptable[which.min(c.tree.full$cptable[,"xerror"]),"CP"]
+# print the best cp
+min.cp
+```
+
+prune the fully grown decision tree to find the optimal tree for the selected
+parameter.
+
+```{r warning=FALSE}
+# Prune the tree fully grown tree
+p.tree.full<- prune(c.tree.full, cp=
+c.tree.full$cptable[which.min(c.tree.full$cptable[,"xerror"]),"CP"])
+fancyRpartPlot(p.tree.full, palettes = c("Greens", "Reds"), sub = "")
+```
+
+# Make a prediction
+
+```{r warning=FALSE}
+# Make a prediction
+stroke.predict <- predict(p.tree.full, test, type = "class")
+stroke.predicted.data <- cbind(test, stroke.predict)
+head(stroke.predicted.data)
+```
+
+Try to compare predicted labels with the ones that were already assigned in test dataset
+For this practical, you can calculate average agreement between assigned and predicted labels for our test set.
+
+```{r warning=FALSE}
+mean(stroke.predict == test$stroke)
+```
+
+
+
+# Feature Selection
+
+
+
+```{r warning=FALSE, message=FALSE}
+# Load the necessary libraries
+pacman::p_load(mlr3, mlr3learners, mlr3viz, mlr3filters, FSelectorRcpp, mlr3pipelines)
+
+# Assuming that 'data.complete' is the name of your dataset and 'stroke' is the target variable
+stroke.task <- TaskClassif$new(id = "stroke", backend = data.complete, target = "stroke")
+
+# Create a filter using the information gain method
+filter.importance = flt("information_gain")
+
+# Calculate the feature importance
+stroke.feature.importance <- filter.importance$calculate(stroke.task)
+
+# Create a pipeline operation to filter the top 3 features
+po = po("filter", filter.importance, filter.nfeat=3)
+
+# Apply the pipeline to the task
+filtered.task = po$train(list(stroke.task))[[1]]
+
+# Subset the data with selected features
+stroke.filtered = subset(data.complete, select = filtered.task$feature_names)
+head(stroke.filtered)
+```
+
+```{r warning=FALSE}
+# Adding the target variable 'stroke' back to the filtered dataset
+stroke.filtered$stroke <- data.complete$stroke
+```
+
+```{r warning=FALSE}
+train_index <- sample(1:nrow(stroke.filtered), 0.8 * nrow(stroke.filtered))
+test_index <- setdiff(1:nrow(stroke.filtered), train_index)
+train <- stroke.filtered[train_index,]
+test <- stroke.filtered[test_index,]
+list(train = summary(train), test = summary(test))
+```
+
+
+```{r warning=FALSE}
+# Fitting a decision tree
+c.tree <- rpart(stroke ~ ., train, method = "class")
+```
+
+```{r warning=FALSE}
+# Printing the tree
+print(c.tree)
+
+# Plot the tree
+fancyRpartPlot(c.tree, palettes = c("Greens", "Reds"), sub = "")
+```
+
+
+# Make a prediction
+
+```{r warning=FALSE}
+# Make a prediction
+stroke.predict <- predict(c.tree, test, type = "class")
+stroke.predicted.data <- cbind(test, stroke.predict)
+head(stroke.predicted.data)
+```
+
+
+```{r warning=FALSE}
+mean(stroke.predict == test$stroke)
+```

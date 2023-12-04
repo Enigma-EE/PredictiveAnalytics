@@ -2,7 +2,7 @@
 title: |
   | INFS_SP5_2023
   | Predictive Analytics
-  | PRACTICAL 2
+  | PRACTICAL 4
 author: "Enna H"
 output: 
   pdf_document:
