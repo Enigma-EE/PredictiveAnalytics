@@ -1,0 +1,228 @@
+---
+title: |
+  | INFS_SP5_2023
+  | Predictive Analytics
+  | Assignment 3 
+  | Classification
+
+author: 
+  - "Huining Huang: huahy057@mymail.unisa.edu.au" 
+output: 
+  pdf_document:
+    toc: true
+editor_options:
+  chunk_output_type: console
+---
+
+
+
+```{r echo = FALSE, include=FALSE}
+# clear all variables, functions, etc
+# clean up memory
+rm(list=ls())
+# clean up memory
+gc()
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  fig.width = 8, 
+  fig.asp = 0.618, 
+  out.width = "80%",
+  fig.align = "center", 
+  root.dir = "../",
+  message = FALSE,
+  size = "small"
+)
+```
+
+
+```{r warning=FALSE, include=FALSE}
+pacman::p_load(tidyverse)
+pacman::p_load(knitr,dplyr,AICcmodavg)
+pacman::p_load(inspectdf,tidyr,stringr, stringi,DT,mice)
+pacman::p_load(caret,modelr)
+pacman::p_load(mlbench,mplot)
+pacman::p_load(tidymodels,glmx)
+pacman::p_load(skimr,vip,yardstick,ranger,kknn,funModeling,Hmisc)
+pacman::p_load(ggplot2,ggpubr,GGally)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+
+
+```{r warning=FALSE, include=FALSE}
+# Decision tree
+pacman::p_load(rpart.plot)
+
+# Data manipulation
+pacman::p_load(rgl, rattle, mice, dplyr, tidyverse)
+
+# Plotting
+pacman::p_load(viridis, hrbrthemes, ggplot2, heplots, ggpubr, forcats)
+```
+
+```{r warning=FALSE, include=FALSE}
+# Load data
+data <- read.csv("data.csv", header = TRUE, sep = ",")
+nrow(data)
+names(data)
+# head(data)
+```
+
+```{r warning=FALSE, include=FALSE}
+pacman::p_load(e1071, caret)
+```
+
+```{r warning=FALSE, include=FALSE}
+set.seed(123)  # for reproducibility
+index <- createDataPartition(data$PotentialFraud, p = 0.8, list = FALSE)
+train_data <- data[index, ]
+test_data <- data[-index, ]
+```
+
+
+```{r warning=FALSE, include=FALSE}
+train_data$PotentialFraud <- factor(train_data$PotentialFraud)
+test_data$PotentialFraud <- factor(test_data$PotentialFraud, levels = levels(train_data$PotentialFraud))
+```
+
+```{r warning=FALSE, include=FALSE}
+# Rebuild the model
+model <- naiveBayes(PotentialFraud ~ ., data = train_data)
+
+# Make predictions
+predictions <- predict(model, test_data)
+
+# Evaluate the model
+confusionMatrix(predictions, test_data$PotentialFraud)
+```
+
+> # Evaluate the model
+> confusionMatrix(predictions, test_data$PotentialFraud)
+Confusion Matrix and Statistics
+
+          Reference
+Prediction     0     1
+         0 67295 40240
+         1  1800  2307
+
+               Accuracy : 0.6234
+                 95% CI : (0.6206, 0.6263)
+    No Information Rate : 0.6189
+    P-Value [Acc > NIR] : 0.0008937
+
+                  Kappa : 0.0341
+
+ Mcnemar's Test P-Value : < 2.2e-16
+
+            Sensitivity : 0.97395
+            Specificity : 0.05422
+         Pos Pred Value : 0.62580
+         Neg Pred Value : 0.56172
+             Prevalence : 0.61890
+         Detection Rate : 0.60277
+   Detection Prevalence : 0.96321
+      Balanced Accuracy : 0.51409
+
+       'Positive' Class : 0
+
+
+Fine-Tuning
+Fine-tuning a Naïve Bayes model involves experimenting with different feature sets or preprocessing methods, as Naïve Bayes doesn't have hyperparameters like some other algorithms.
+
+
+
+
+
+```{r warning=FALSE, include=FALSE}
+tuned_model <- naiveBayes(PotentialFraud  ~ ., data = train_data, usekernel = TRUE)
+```
+
+```{r warning=FALSE, include=FALSE}
+final_predictions <- predict(tuned_model, test_data)
+
+
+confusionMatrix(final_predictions, test_data$PotentialFraud)
+```
+
+Confusion Matrix and Statistics
+
+          Reference
+Prediction     0     1
+         0 67295 40240
+         1  1800  2307
+
+               Accuracy : 0.6234
+                 95% CI : (0.6206, 0.6263)
+    No Information Rate : 0.6189
+    P-Value [Acc > NIR] : 0.0008937
+
+                  Kappa : 0.0341
+
+ Mcnemar's Test P-Value : < 2.2e-16
+
+            Sensitivity : 0.97395
+            Specificity : 0.05422
+         Pos Pred Value : 0.62580
+         Neg Pred Value : 0.56172
+             Prevalence : 0.61890
+         Detection Rate : 0.60277
+   Detection Prevalence : 0.96321
+      Balanced Accuracy : 0.51409
+
+       'Positive' Class : 0
+
+
+The confusion matrix you've provided for both the pre-tuned and post-tuned Naïve Bayes models appear to be identical. This suggests that there was no change in the model's performance after the fine-tuning process. Let's analyze the performance based on the metrics provided:
+
+### Performance Metrics Analysis
+
+1. **Accuracy**: The accuracy of the model is 62.34%, which is slightly above the No Information Rate (NIR) of 61.89%. NIR represents the accuracy of a trivial model that always predicts the most frequent class. The fact that the accuracy is only marginally better than the NIR indicates that the model is not performing significantly better than a naive model that always predicts the most common class.
+
+2. **Kappa**: The Kappa statistic is 0.0341, which is very low. Kappa measures the agreement between the predictions and the actual values, corrected for the agreement that could happen by chance. A low Kappa value indicates that there's little agreement between predictions and actual values, beyond what would be expected by random chance.
+
+3. **Sensitivity (Recall) and Specificity**: The model has a high sensitivity (97.395%) but a very low specificity (5.422%). This means that the model is very good at identifying the negative class (0) but performs poorly in correctly identifying the positive class (1). In the context of fraud detection, this could mean that the model is adept at recognizing non-fraudulent cases but struggles to accurately identify fraudulent cases.
+
+4. **Positive Predictive Value (Precision) and Negative Predictive Value**: The positive predictive value (62.58%) and negative predictive value (56.17%) are both moderate. This reflects the model's moderate ability to predict true positives and true negatives, respectively.
+
+5. **Balanced Accuracy**: The balanced accuracy, which averages sensitivity and specificity, is 51.409%. This low value indicates that the model is not performing well in terms of balancing the true positive rate and true negative rate, which is crucial in a fraud detection scenario where both identifying fraud (true positives) and avoiding false alarms (true negatives) are important.
+
+6. **Mcnemar's Test**: The p-value for Mcnemar's test is very low (< 2.2e-16), indicating that there is a significant difference in the performance of the model on different classes. This is consistent with the large discrepancy between sensitivity and specificity.
+
+### Conclusion and Recommendations
+
+- **No Improvement with Fine-Tuning**: Since the metrics are identical pre and post-tuning, it appears that the fine-tuning process did not yield any improvement. This could be due to the limitations of the Naïve Bayes model itself or the nature of the data.
+
+- **Model's Limitations**: The model is heavily biased towards predicting the majority class and is not effectively capturing the characteristics of the minority class (potential fraud cases).
+
+- **Need for Further Model Refinement**: To improve the model's performance, especially its ability to detect fraudulent cases (increasing specificity), you might need to explore other model types or techniques. Consider using techniques like SMOTE (Synthetic Minority Over-sampling Technique) for addressing class imbalance, or try different algorithms that might capture the complexities of fraud detection more effectively, like Random Forests or Gradient Boosting Machines.
+
+- **Feature Engineering**: Revisiting feature engineering and selection might also help. In fraud detection, it's often not just about the individual features but also about the interactions between them.
+
+- **Domain Knowledge Integration**: Integrating domain-specific knowledge into the feature engineering process can significantly improve model performance in specialized areas like fraud detection.
+
+The nature of healthcare insurance fraud detection might require more sophisticated modeling techniques and a more nuanced approach to feature engineering and class imbalance.
+
+
+### 1. Understanding the Data Characteristics
+- **Feature Relationships**: Naïve Bayes assumes independence between features, which is rarely the case in complex domains like fraud detection. If your data includes significant feature interactions or dependencies, this fundamental assumption of Naïve Bayes can lead to poor performance.
+- **Data Type Suitability**: If your dataset primarily consists of continuous variables or variables that do not fit the Naïve Bayes assumption of categorical (for Multinomial NB) or normally distributed (for Gaussian NB), the model may not be appropriate.
+
+### 2. Model Performance Metrics
+- **Low Specificity**: In fraud detection, it's crucial to have a balanced sensitivity (ability to detect fraud) and specificity (ability to recognize non-fraud). A low specificity, as indicated in your model's performance, suggests that Naïve Bayes is not effectively distinguishing between fraudulent and non-fraudulent cases.
+- **Low Kappa Score**: A low Kappa score indicates that the model is not performing much better than random chance, especially when considering the class imbalance typically present in fraud detection datasets.
+- **Balanced Accuracy**: Given the imbalanced nature of fraud detection data, traditional accuracy is not always informative. Balanced accuracy considers both sensitivity and specificity, and a low score here is indicative of poor overall performance.
+
+### 3. Comparing with Other Models
+- **Baseline Comparison**: If other models, such as Random Forests or logistic regression, significantly outperform Naïve Bayes on the same data, this could be an indication that Naïve Bayes is not well-suited for your specific task.
+- **Complexity of Fraud Patterns**: More sophisticated models may capture complex, non-linear relationships and interactions between features more effectively than Naïve Bayes.
+
+### 4. Class Imbalance Issues
+- **Handling Imbalanced Data**: Naïve Bayes may not perform well on highly imbalanced datasets typical in fraud detection, where fraudulent cases are much rarer than legitimate ones.
+
+### 5. Domain-Specific Considerations
+- **Fraud Detection Complexity**: Fraud detection often involves identifying subtle and complex patterns. If Naïve Bayes fails to capture these complexities, it might not be the right choice for the project.
+

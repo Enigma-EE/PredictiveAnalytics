@@ -1,0 +1,333 @@
+
+
+```{r warning=FALSE, include=FALSE}
+pacman::p_load(tidyverse)
+pacman::p_load(knitr,dplyr,AICcmodavg)
+pacman::p_load(inspectdf,tidyr,stringr, stringi,DT,mice)
+pacman::p_load(caret,modelr)
+pacman::p_load(mlbench,mplot)
+pacman::p_load(tidymodels,glmx)
+pacman::p_load(skimr,vip,yardstick,ranger,kknn,funModeling,Hmisc)
+pacman::p_load(ggplot2,ggpubr,GGally,corrplot, ggthemes)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+
+```{r warning=FALSE}
+# Load data
+data <- read.csv("finalData.csv", header = TRUE, sep = ",")
+nrow(data)
+names(data)
+# head(data)
+```
+
+```{r warning=FALSE}
+data <- data[, !(names(data) %in% c("TotalClaimAmount", "OPTotalAmount", "PhysRoleCount"))]
+```
+
+```{r warning=FALSE}
+# print all the columns
+names(data)
+```
+
+```{r warning=FALSE}
+# Check the distribution and basic information of the dataset
+print("Summary of the dataset:")
+summary(data)
+
+print("Structure of the dataset:")
+str(data)
+```
+
+```{r}
+# Get the frequency distribution of PotentialFraud
+print("Frequency distribution of PotentialFraud:")
+freq <- table(data$PotentialFraud)
+print(freq)
+```
+
+```{r}
+# Get the percentage distribution of PotentialFraud
+print("Percentage distribution of PotentialFraud:")
+percentage <- prop.table(freq) * 100
+print(percentage)
+```
+
+```{r}
+# Convert PotentialFraud to a factor for visualization
+data$PotentialFraud <- as.factor(data$PotentialFraud)
+
+# Create a bar plot for PotentialFraud distribution
+ggplot(data, aes(x = PotentialFraud)) +
+  geom_bar() +
+  ggtitle("Distribution of Potential Fraud") +
+  xlab("Potential Fraud") +
+  ylab("Count") +
+  scale_y_continuous(labels = scales::comma)
+```
+
+
+
+
+### 2.2.2 Gender and Race
+```{r}
+# Convert gender and race to factors 
+data$Gender <- as.factor(data$Gender)
+data$Race <- as.factor(data$Race)
+```
+
+```{r}
+# Check unique values
+unique_values_gr <- sapply(data[,c('Gender', 'Race')], unique)
+unique_values_gr
+
+# Plot Gender and Race
+gender_plot <- ggplot(data, aes(x = Gender)) +
+  geom_bar() +
+  theme_minimal() +
+  scale_y_continuous(labels = scales::comma) +
+  ggtitle('Gender Distribution')
+
+race_plot <- ggplot(data, aes(x = Race)) +
+  geom_bar() +
+  theme_minimal() +
+  scale_y_continuous(labels = scales::comma) +
+  ggtitle('Race Distribution')
+
+grid.arrange(gender_plot, race_plot, ncol = 1)
+```
+
+# 2.2.3 Health Conditions
+```{r}
+# Check unique values for health conditions
+unique_values_hc <- sapply(data[,c('ChronicCond_Alzheimer', 
+                                        'ChronicCond_Heartfailure', 
+                                        'ChronicCond_KidneyDisease', 
+                                        'ChronicCond_Cancer', 
+                                        'ChronicCond_ObstrPulmonary', 
+                                        'ChronicCond_Depression', 
+                                        'ChronicCond_Diabetes', 
+                                        'ChronicCond_IschemicHeart', 
+                                        'ChronicCond_Osteoporasis', 
+                                        'ChronicCond_rheumatoidarthritis', 
+                                        'ChronicCond_stroke')], unique)
+print(unique_values_hc)
+```
+
+
+# Calculate the correlation matrix
+cor_matrix <- cor(data[,c('ChronicCond_Alzheimer', 
+                               'ChronicCond_Heartfailure', 
+                               'ChronicCond_KidneyDisease', 
+                               'ChronicCond_Cancer', 
+                               'ChronicCond_ObstrPulmonary', 
+                               'ChronicCond_Depression', 
+                               'ChronicCond_Diabetes', 
+                               'ChronicCond_IschemicHeart', 
+                               'ChronicCond_Osteoporasis', 
+                               'ChronicCond_rheumatoidarthritis', 
+                               'ChronicCond_stroke')], method="spearman")
+
+# Create the correlation plot with coefficients displayed
+corrplot(cor_matrix, method="shade", type="upper", order="hclust", 
+         addCoef.col="black",  # Color of the coefficients
+         number.cex=0.7,      # Font size of coefficients
+         tl.cex = 0.7,        # Font size of variable names
+         title="Correlation Plot of Health Conditions")
+
+
+
+```{r}
+# Convert the wide dataset to a long format for easier plotting
+data_long <- data %>%
+  gather(key = "ChronicCondition", value = "Value", 
+         c('ChronicCond_Alzheimer', 'ChronicCond_Heartfailure', 'ChronicCond_KidneyDisease', 
+           'ChronicCond_Cancer', 'ChronicCond_ObstrPulmonary', 'ChronicCond_Depression', 
+           'ChronicCond_Diabetes', 'ChronicCond_IschemicHeart', 'ChronicCond_Osteoporasis', 
+           'ChronicCond_rheumatoidarthritis', 'ChronicCond_stroke'))
+
+# Ensure that the Value column is a factor
+data_long$Value <- as.factor(data_long$Value)
+
+# Plot the data
+data_long %>%
+  ggplot(aes(x = Value, fill = Value)) +
+  geom_bar(position = 'identity') +
+  coord_flip() + 
+  facet_wrap(~ChronicCondition, scales = "free", ncol = 3) +
+  theme_minimal() +
+  theme_economist() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank()) +
+  labs(fill = "Condition Status", y = "Frequency", x = "") +
+  scale_fill_manual(values = c("1" = "#312876", "0" = "#7c9c86"), 
+                    labels = c("1" = "Chronic", "0" = "No Chronic"))
+```
+
+
+##2.2.4 Financial Details
+
+```{r}
+# Check distribution of financial columns
+summary(data[,c('TotalClaimAmount', 'OPTotalAmount', 'Log_TotalClaimAmount', 'Log_IPTotalAmount', 'Log_OPTotalAmount')])
+
+# Convert wide format to long for plotting
+financial_long <- gather(data, key="FinancialType", value="Value", TotalClaimAmount, OPTotalAmount, Log_TotalClaimAmount, Log_IPTotalAmount, Log_OPTotalAmount)
+
+# Create a histogram
+ggplot(financial_long, aes(x=Value)) +
+  geom_histogram(bins=30, fill="#062e3e", alpha=0.7) +
+  facet_wrap(~FinancialType, scales="free") +
+  theme_minimal() +
+  theme_economist() +
+  scale_y_continuous(labels = scales::comma) +  # Using scales::comma format for y-axis
+  labs(x='Value', y='Frequency', title='Distribution of Financial Details')
+```
+
+
+---
+
+
+```{r warning=FALSE, include=FALSE}
+# Decision tree
+pacman::p_load(rpart.plot)
+
+# Data manipulation
+pacman::p_load(rgl, rattle, mice, dplyr, tidyverse)
+
+# Plotting
+pacman::p_load(viridis, hrbrthemes, ggplot2, heplots, ggpubr, forcats)
+```
+
+
+```{r warning=FALSE}
+pacman::p_load(ranger)
+
+# Identify the target variable and feature variables
+target_variable <- "PotentialFraud"
+feature_variables <- setdiff(names(data), target_variable)
+
+# Define the formula for the random forest model
+formula <- as.formula(paste(target_variable, "~ ."))
+
+# Train the random forest model using ranger
+rf_model <- ranger(formula,
+                   data = data,
+                   importance = 'impurity',  # This specifies to use Gini impurity for importance
+                   num.trees = 100)
+
+# Get the importance scores
+importance_scores <- rf_model$variable.importance
+
+# Create a data frame of the feature importance scores
+importance_df <- data.frame(Feature = names(importance_scores), Importance = importance_scores)
+
+# Order the features by importance
+importance_df <- importance_df[order(-importance_df$Importance), ]
+```
+
+```{r warning=FALSE}
+# Print the top 5 features
+print("Top 10 features based on Gini importance:")
+print(head(importance_df, 10))
+```
+
+
+```{r warning=FALSE, echo=FALSE}
+
+# Visualize the top 10 features based on Gini importance
+top_n_features <- head(importance_df, 10)
+
+# Create a bar plot
+ggplot(top_n_features, aes(x = reorder(Feature, Importance), y = Importance)) +
+    geom_bar(stat = "identity", fill = "steelblue") +
+    coord_flip() +  # Flip coordinates for horizontal bars
+    theme_minimal() +
+    labs(title = "Top 10 Features Based on Gini Importance",
+         x = "Features",
+         y = "Importance Score") +
+    theme(text = element_text(size = 12))
+```
+
+
+
+
+```{r warning=FALSE}
+print(importance_df)
+# shape of the data
+dim(importance_df)
+```
+
+
+```{r warning=FALSE}
+# Define a threshold for low importance; this could be a quantile, a fixed value, or based on domain knowledge
+low_importance_threshold <- quantile(importance_df$Importance, 0.25)  # For example, the 25th percentile
+
+# Identify the features that fall below this importance threshold
+low_importance_features <- importance_df$Feature[importance_df$Importance <= low_importance_threshold]
+print("Features with low importance:")
+print(low_importance_features)
+```
+
+
+
+                                  Feature Importance
+County                             County  13270.296
+State                               State  11841.497
+Log_OPTotalAmount       Log_OPTotalAmount  10319.958
+Log_TotalClaimAmount Log_TotalClaimAmount   9116.225
+Age                                   Age   8750.642
+
+
+
+
+
+---
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Load necessary libraries
+library(dplyr)
+library(ggplot2)
+library(corrplot)
+
+# List of numerical variables
+numerical_vars <- c("Age", "Log_TotalClaimAmount", "Log_IPTotalAmount", "Log_OPTotalAmount", 
+                    "UniquePhysCount")
+
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# print all the columns
+names(data)
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Separate the data into numerical and categorical dataframes
+numerical_data <- data[, numerical_vars]
+categorical_data <- data[, categorical_vars]
+
+# Perform Pearson correlation on numerical data
+numerical_correlation <- cor(numerical_data, method = "pearson")
+print("Numerical Correlation Matrix:")
+print(numerical_correlation)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Visualize the numerical correlation matrix
+corrplot(numerical_correlation, method = "color", addCoef.col = "black")
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# save the data as csv
+write.csv(data, "data.csv", row.names = FALSE)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# examine the data
+str(data)
+```

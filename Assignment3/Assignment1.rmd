@@ -1,0 +1,1291 @@
+---
+title: |
+  | INFS_SP5_2023
+  | Predictive Analytics
+  | Assignment 1
+author: "Enna Kris"
+output:
+  pdf_document: default
+  html_document:
+    theme: spacelab
+    df_print: paged
+editor_options:
+  chunk_output_type: console
+---
+
+
+```{r echo = FALSE, include=FALSE}
+# clear all variables, functions, etc
+# clean up memory
+rm(list=ls())
+# clean up memory
+gc()
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  fig.width = 8, 
+  fig.asp = 0.618, 
+  out.width = "80%",
+  fig.align = "center", 
+  root.dir = "../",
+  message = FALSE,
+  size = "small"
+)
+```
+
+
+```{r warning=FALSE, include=FALSE}
+pacman::p_load(tidyverse, gglm)
+pacman::p_load(knitr,dplyr,AICcmodavg)
+pacman::p_load(inspectdf,tidyr,stringr, stringi,DT)
+pacman::p_load(caret,modelr)
+pacman::p_load(mlbench,mplot)
+pacman::p_load(tidymodels,glmx)
+pacman::p_load(skimr,vip,yardstick,ranger,kknn,funModeling,Hmisc)
+pacman::p_load(ggplot2,ggpubr,ggthemes,gridExtra,scales)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+```{r warning=FALSE, include=FALSE}
+
+# Data manipulation
+pacman::p_load(rgl, rattle, mice)
+
+# Plotting
+pacman::p_load(viridis, hrbrthemes, heplots, forcats)
+```
+
+
+```{r warning=FALSE, include=FALSE}
+# Set theme
+theme_set(theme_economist())
+
+```
+
+
+**Huining Huang huahy057@mymail.unisa.edu.au**
+
+**Lingjun Ji Jiyly006@mymail.unisa.edu.au**
+
+
+--- 
+
+## Part 1: Introduction
+
+
+Healthcare insurance is crucial for citizens' access to quality healthcare and national well-being. But it's threatened by healthcare insurance fraud, which involves deceptive activities among medical providers, patients, and insurance companies, posing a significant challenge in the healthcare sector. Insurance companies are frequently on the receiving end of these bad practices, which in turn has caused them to hike the prices of their insurance premiums, making healthcare costs surge periodically.[1] It is pretty evident that patients and their healthcare information can easily be exploited which later can hamper the overall cost.[1] Healthcare fraud has far-reaching consequences. It jeopardizes the healthcare system's stability, erodes patient trust in insurance, and can lead to unnecessary expenses and health risks from unnecessary treatments. It also poses financial risks to insurance companies and damages the reputation of all healthcare providers.
+
+In order to detect and avoid the fraud, data mining techniques are applied.[2] Data mining aids in uncovering fraud patterns and unusual behavior in extensive medical data, helping the healthcare system spot unnecessary procedures and ensure appropriate care for patients. Predictive models using historical data can also identify potential fraudulent providers, enabling early detection and prevention of medical insurance fraud. This leads to cost reduction for insurance companies and, in turn, lower insurance premiums.
+
+In this paper, we will examine academic papers on healthcare technologies and algorithms to improve our approach and feature extraction strategies. We will also use data mining to analyze a detailed dataset for detecting medical fraud. This dataset consists of medical insurance claims, containing provider details, billing information, patient records, procedure data, and fraud indicators. Our goal is to extract meaningful features from this dataset and build a predictive model to identify potential medical fraud providers.
+
+
+---
+
+## Part 2: Related Work
+
+
+This section will review three academic papers that analyze and address healthcare fraud prediction from different perspectives, providing valuable insights for the current task.
+
+First, the paper titled "Healthcare Provider Summary Data for Fraud Classification"[3] by J. M. Johnson emphasizes the critical role of feature engineering and dataset construction in healthcare fraud detection. The author leverages the latest publicly available data from CMS and introduces two new labeled Medicare Part B datasets for supervised learning. Their research demonstrates that, through careful selection and construction of the SbP feature set, significant improvements can be achieved in the performance of practical healthcare fraud detection models. This is of paramount importance to our project as we need to carefully consider how to design and select the most informative features to enhance the accuracy of our model.
+
+Furthermore, the paper titled "A Comparative Analysis of Fraud Detection in Healthcare using Data Balancing & Machine Learning Technique"[4] emphasizes the use of data balancing and machine learning techniques to enhance healthcare fraud detection. The experimental results from authors Nikita Agrawal et al. indicate that machine learning models oversampling the imbalanced dataset using two data balancing techniques, namely Class Weighing Scheme (CWS) and Adaptive Synthetic Oversampling (ADASYN), outperform the imbalanced dataset. This finding prompts us to consider adopting data balancing techniques in healthcare fraud detection to improve model performance metrics.
+
+Lastly, in the paper titled "Predicting health insurance claim frauds using supervised machine learning technique"[5] authors Veena K et al. propose a method for healthcare fraud detection using the decision tree classifier algorithm. They compare the accuracy of four algorithms—logistic regression, random forest, decision tree classifier, and naive Bayes—in fraud detection. Their experimental results show that the decision tree classifier exhibits outstanding accuracy, reaching 97.03% in fraud detection. This finding provides a strong starting point for us to consider whether we should incorporate the decision tree classifier into our model to enhance the accuracy of our predictive model.
+
+Through in-depth examination of these papers, we have gained insights into the pivotal roles played by feature engineering, data balancing and decision tree classifiers techniques in healthcare fraud prediction. These insights will guide us in formulating sound data preprocessing, feature extraction plans and methodological strategies for our project, ensuring that we leverage the experiences and successes of these previous works to address the challenges of healthcare fraud prediction more effectively.
+
+
+--- 
+
+# Part 3: Data Exploration and Feature Engineering
+
+
+```{r include=FALSE, warning=FALSE, message=FALSE}
+# Load Train Dataset
+Train <- read.csv("input/Train-1542865627584.csv")
+Train_Beneficiary <- read.csv("input/Train_Beneficiarydata-1542865627584.csv")
+Train_Inpatient <- read.csv("input/Train_Inpatientdata-1542865627584.csv")
+Train_Outpatient <- read.csv("input/Train_Outpatientdata-1542865627584.csv")
+
+# Load Test Dataset
+Test <- read.csv("input/Test-1542969243754.csv")
+Test_Beneficiary <- read.csv("input/Test_Beneficiarydata-1542969243754.csv")
+Test_Inpatient <- read.csv("input/Test_Inpatientdata-1542969243754.csv")
+Test_Outpatient <- read.csv("input/Test_Outpatientdata-1542969243754.csv")
+```
+
+
+## 1. Data Source and Description
+
+Unfortunately, the Kaggle page does not provide metadata for the dataset, necessitating external research to grasp the variables and the data thoroughly. Noteworthy insights into the dataset can be found in a blog post authored by Pulkit Ratna Ganjeer, available at the following link: [Pulkit Ratna Ganjeer's Blog Post](https://pulkitratnaganjeer.medium.com/healthcare-fraud-detection-using-machine-learning-5996d63bd3c7). 
+
+The table below are significant takeaways from the blog that were not highlighted on the Kaggle page:
+
+\newpage
+
+**Table 1: Data Source and Description**
+
+Mapping Data Details
+=====================
+
+| Sections       | Details                                                                                                      |
+|----------------|--------------------------------------------------------------------------------------------------------------|
+| Mapping Data   | Contains the mapping of Provider's unique id and the class label signifying whether the Provider is fraud or not. For the Test data, only the Provider's unique id and the class label is given. |
+
+
+Beneficiary Data Details
+========================
+
+| Sections                 | Details                                                                                                       |
+|--------------------------|---------------------------------------------------------------------------------------------------------------|
+| IP Reimbursement | Annual amount reimbursed for the treatment of the beneficiary when admitted to the hospital.                 |
+| IP Deductible    | Annual premium amount paid to the Insurance Agency towards the treatment of the beneficiary when admitted to the hospital. |
+| OP Reimbursement  | Annual amount reimbursed for the treatment of the beneficiary when visited the hospital but not admitted.    |
+| OP Deductible     | Annual premium amount paid to the Insurance Agency towards the treatment of the beneficiary when he visited the hospital but was not admitted. |
+
+
+Inpatient and Outpatient Data Details
+======================================
+
+| Sections                 | Details                                                                                                       |
+|--------------------------|---------------------------------------------------------------------------------------------------------------|
+| InscReimbursed   | Amount reimbursed by the Payer (Insurance Agency) for the healthcare services provided to the beneficiary.   |
+| Physicians-related columns | Columns showing the physicians who attended the beneficiary/patient, operated the patient, and any other physicians if any. |
+| Admission and Discharge Date (Inpatient Data) | Columns showing the dates on which the beneficiary was admitted to the hospital and when he was discharged. |
+| Claim Diagnosis Codes 1-10 | ClmDiagnosisCode_1: Diagnosis code identifying the beneficiary's principal diagnosis. ClmDiagnosisCode_2-10: Diagnosis code in the 2nd, 3rd, and so on, till the 10th position identifying the condition(s) for which the beneficiary is receiving care. |
+| Claim Procedure Codes 1-6 | Codes that indicate the principal or other procedures performed during the period covered by the institutional claim. |
+| DiagnosisGroupCode (Inpatient Data) | Code to classify hospital cases according to certain groups, also referred to as DRGs, which are expected to have similar hospital resource use (cost). |
+| DeductibleAmtPaid        | Amount the beneficiary has to pay as part of the claim, and the rest of the amount is paid by the insurance company. It is equal to the total claim amount minus the reimbursed amount. |
+
+
+
+##  2. Exploratory Data Analysis (EDA) and Data Preprocessing
+
+
+### 2.1 Overview of Train and Test Datasets and Data Cleaning
+
+
+In the initial analysis, we examined the training dataset, which has 5410 entries, primarily focusing on two key variables: "Provider" and "PotentialFraud." The "Provider" is a unique identifier for healthcare providers, and "PotentialFraud" indicates possible fraudulent activities, marked as "Yes" or "No." Notably, there's an imbalance in the "PotentialFraud" distribution, with a higher proportion of non-fraudulent cases at 90.64% compared to 9.36% fraudulent ones. Importantly, the training and test datasets are distinct, with no common providers, enabling accurate model evaluation on unseen data.
+
+The test dataset, with 1353 entries, has a similar structure, using the "Provider" column to identify providers. We found that the "Provider" column in the training dataset is unique across entries, indicating no duplicates, and both datasets have no duplicate rows or missing values. This suggests well-organized data that doesn't require initial cleaning or deduplication.
+
+Moving forward, we'll consider strategies like transforming the "PotentialFraud" variable for classification tasks. Since the test dataset lacks this column, it's suitable for validation based on insights from the training dataset. Strategies like cross-validation and addressing data imbalance will be essential to build a robust machine learning model while avoiding overfitting.
+
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+# Check the distribution and basic information of Train dataset
+summary(Train)
+str(Train)
+# Get the frequency distribution of PotentialFraud
+table(Train$PotentialFraud)
+# Get the percentage distribution of PotentialFraud
+prop.table(table(Train$PotentialFraud))
+
+# Check the distribution and basic information of Test dataset
+summary(Test)
+str(Test)
+```
+
+
+```{r warning=FALSE, message=FALSE, echo = FALSE}
+# Convert PotentialFraud to a factor
+Train$PotentialFraud <- as.factor(Train$PotentialFraud)
+# Create a bar plot
+ggplot(Train, aes(x = PotentialFraud)) +
+  geom_bar() +
+  ggtitle("Distribution of Potential Fraud") +
+  xlab("Potential Fraud") +
+  ylab("Count")
+```
+**Figure 1:** Distribution of Potential Fraud in the Train dataset.
+
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+# Check the number of unique providers in the 'Train' dataset and look for duplicates
+
+# Count the occurrences of each unique value in the 'Provider' column and display the top 5
+Train %>%
+  dplyr::group_by(Provider) %>%
+  dplyr::summarize(Count = n()) %>%
+  dplyr::arrange(desc(Count)) %>%
+  head(5)
+
+# Check for duplicates in the 'Provider' column in the Test dataset
+Test %>%
+  dplyr::group_by(Provider) %>%
+  dplyr::summarize(Count = n()) %>%
+  dplyr::arrange(desc(Count)) %>%
+  head(5)
+```
+
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+# check missing values for the Train dataset
+inspectdf::inspect_na(Train)
+# check missing values for the Test dataset
+inspectdf::inspect_na(Test)
+```
+
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+# Check for duplicate rows in train and test data
+sum(duplicated(Train))
+sum(duplicated(Test))
+
+```
+
+
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+
+# Compare the top providers between Train and Test datasets
+common_providers <- intersect(Train$Provider, Test$Provider)
+
+# Display the common providers
+common_providers
+```
+
+
+---
+
+
+
+
+### 2.2 Beneficiary Data Overview and Data Pre-processing
+
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+# Check the distribution and basic information of Train_Beneficiarydata dataset
+summary(Train_Beneficiary)
+str(Train_Beneficiary)
+```
+
+
+**2.2.1 Demographic Details**
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+# Convert DOB to datetime format and extract year
+Train_Beneficiary$DOB <- as.Date(Train_Beneficiary$DOB, format="%Y-%m-%d")
+Train_Beneficiary$Year_of_Birth <- as.numeric(format(Train_Beneficiary$DOB, "%Y"))
+```
+
+```{r warning=FALSE, echo = FALSE}
+
+# Create a new variable categorizing years by decades
+Train_Beneficiary$Decade <- cut(Train_Beneficiary$Year_of_Birth, breaks = seq(1900, 2020, by = 10), include.lowest = TRUE, right = FALSE, labels = FALSE)
+
+# Plot Year of Birth colored by decades
+ggplot(Train_Beneficiary, aes(x = Year_of_Birth, fill = as.factor(Decade))) +
+  geom_histogram(binwidth = 1, show.legend = TRUE) +
+  scale_fill_manual(values = c("#40004b", "#762a83", "#9970ab", "#c2a5cf", "#e7d4e8", "#f7f7f7", "#d9f0d3", "#a6dba0", "#5aae61", "#1b7837", "#00441b"), name = "Decade",
+                    labels = c("1900s", "1910s", "1920s", "1930s", "1940s", "1950s", "1960s", "1970s", "1980s", "1990s", "2000s", "2010s")) +
+  xlab("Year of Birth") +
+  ylab("Frequency") +
+  theme_minimal()+
+  theme_economist()
+
+```
+**Figure 2:** Distribution of Year of Birth in the Train_Beneficiary dataset.
+
+
+The distribution of birth years in the demographic details of beneficiaries exhibits a significant skew, primarily concentrated in the decades of the 1920s, 1930s, and 1940s. This allows us to identify the predominant age groups in the dataset, serving as important predictive variables for analyzing health conditions and financial implications.
+
+
+**2.2.2 Gender and Race**
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+# Convert gender, race to factors 
+Train_Beneficiary$Gender <- as.factor(Train_Beneficiary$Gender)
+Train_Beneficiary$Race <- as.factor(Train_Beneficiary$Race)
+
+
+# Check unique values
+unique_values_gr <- sapply(Train_Beneficiary[,c('Gender', 'Race')], unique)
+unique_values_gr
+```
+
+
+```{r warning=FALSE, echo = FALSE}
+library(gridExtra)
+
+# Plot Gender and Race
+gender <- ggplot(Train_Beneficiary, aes(x = Gender)) +
+  geom_bar() +
+  theme_minimal() +
+  theme_economist() +
+  ggtitle('Gender Distribution')
+
+race <- ggplot(Train_Beneficiary, aes(x = Race)) +
+  geom_bar() +
+  theme_minimal() +
+  theme_economist() +
+  ggtitle('Race Distribution')
+
+grid.arrange(gender, race , ncol = 1)
+```
+
+**Figure 3.** The distribution of Gender and Race in the Train_Beneficiary dataset.
+
+
+Analyzing the gender and race variables reveals a limited yet distinct categorization. The gender variable bifurcates into two categories, while the race variable encompasses three unique levels. This categorical data is poised to be a critical asset in predictive modelling, potentially unveiling patterns or trends that exhibit correlation with gender or race factors.
+
+
+**2.2.3 Geographical Disparity in State and County**
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+Train_Beneficiary$State <- as.factor(Train_Beneficiary$State)
+Train_Beneficiary$County <- as.factor(Train_Beneficiary$County)
+
+
+# Check unique values
+unique_values_sc <- sapply(Train_Beneficiary[,c('State', 'County')], unique)
+# unique_values_sc
+```
+
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+top_states <- Train_Beneficiary %>%
+  group_by(State) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count)) %>%
+  slice(1:5) %>%
+  mutate(State = as.character(State))
+```
+
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+# Calculate the count of each county and get top 30
+county_data_top30 <- Train_Beneficiary %>%
+  group_by(County) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count)) %>%
+  slice(1:30)
+
+# Convert County to a factor and reorder it based on count
+county_data_top30$County <- factor(county_data_top30$County, levels = county_data_top30$County[order(-county_data_top30$count)])
+
+```
+
+
+```{r warning=FALSE, echo = FALSE}
+# the state plot
+state_plot <- ggplot(data = Train_Beneficiary, aes(x = State)) +
+  geom_bar(aes(fill = State %in% top_states$State)) +
+  geom_text(data = filter(Train_Beneficiary, State %in% top_states$State), stat = 'count', aes(label = after_stat(count)), vjust = -1) +
+  scale_fill_manual(values = c("TRUE" = "#371b6d", "FALSE" = "gray"), guide = FALSE) +
+  theme_minimal() +
+  theme_economist() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title = "Distribution of States", x = "State", y = "Frequency") +
+  scale_x_discrete(breaks = levels(Train_Beneficiary$State))
+
+# the county plot
+county_plot <- ggplot(county_data_top30, aes(x = County, y = count)) +
+  geom_bar(stat = "identity") +
+  theme_minimal() +
+  theme_economist() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  labs(title = "Distribution of Top 30 Counties", x = "County", y = "Frequency")
+
+# Arrange the plots in one row
+grid.arrange(state_plot, county_plot, nrow = 2)
+```
+
+**Figure 4.** The distribution of States and Counties in the Train_Beneficiary dataset.
+
+The dataset unveils considerable geographical disparities, representing 54 unique states and 314 distinct counties. The state data is predominantly clustered around labels 5, 10, 45, 33, and 39, and the prominent counties are designated as 200, 10, 20, 60, and 0. This geographical data can be a linchpin in assessing healthcare accessibility and uncovering potential fraud patterns localized within specific regions.
+
+
+
+**2.2.4 Health Conditions**
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+# Check unique values
+unique_values_hc <- sapply(Train_Beneficiary[,c('ChronicCond_Alzheimer', 'ChronicCond_Heartfailure', 'ChronicCond_KidneyDisease', 'ChronicCond_Cancer', 'ChronicCond_ObstrPulmonary', 'ChronicCond_Depression', 'ChronicCond_Diabetes', 'ChronicCond_IschemicHeart', 'ChronicCond_Osteoporasis', 'ChronicCond_rheumatoidarthritis', 'ChronicCond_stroke')], unique)
+unique_values_hc
+```
+
+
+```{r warning=FALSE, echo = FALSE}
+pacman::p_load(psych)
+
+# Calculate the correlation matrix
+cor_matrix <- Train_Beneficiary[,c('ChronicCond_Alzheimer', 'ChronicCond_Heartfailure', 'ChronicCond_KidneyDisease', 'ChronicCond_Cancer', 'ChronicCond_ObstrPulmonary', 'ChronicCond_Depression', 'ChronicCond_Diabetes', 'ChronicCond_IschemicHeart', 'ChronicCond_Osteoporasis', 'ChronicCond_rheumatoidarthritis', 'ChronicCond_stroke')]
+
+# Create the correlation plot
+cor.plot(cor_matrix, labels = rep("", ncol(cor_matrix)))
+
+```
+
+
+```{r warning=FALSE, echo = FALSE}
+
+Train_Beneficiary_long <- Train_Beneficiary %>%
+  gather(key = "ChronicCondition", value = "Value", 
+         c('ChronicCond_Alzheimer', 'ChronicCond_Heartfailure', 'ChronicCond_KidneyDisease', 
+           'ChronicCond_Cancer', 'ChronicCond_ObstrPulmonary', 'ChronicCond_Depression', 
+           'ChronicCond_Diabetes', 'ChronicCond_IschemicHeart', 'ChronicCond_Osteoporasis', 
+           'ChronicCond_rheumatoidarthritis', 'ChronicCond_stroke')) %>%
+  mutate(Value = factor(Value, levels = c(1, 2), labels = c("1", "0")))
+
+
+Train_Beneficiary_long %>%
+  ggplot(aes(x = Value, fill = Value)) +
+  geom_bar(position = 'identity') +
+  coord_flip() + 
+  facet_wrap(~ChronicCondition, scales = "free", ncol = 3) +
+  theme_minimal() +
+  theme_economist() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank()) +
+  labs(fill = "Condition Status", y = "Frequency", x = "") +
+  scale_fill_manual(values = c("1" = "#312876", "0" = "#7c9c86"), 
+                    labels = c("1" = "Chronic", "0" = "No Chronic"))
+
+
+```
+**Figure 5.** The correlation distribution of Health Conditions in the Train_Beneficiary dataset.
+
+The analysis of chronic health conditions in the dataset did not reveal significant correlations between different diseases, indicating their independent occurrence. This independence is beneficial in predictive modeling as it avoids issues of multicollinearity and enhances model stability. Furthermore, a more in-depth analysis showed a higher prevalence of certain chronic conditions such as diabetes, heart failure, and ischemic heart disease. This finding helps us understand the common health issues among the beneficiary population.
+
+
+
+
+
+**2.2.5 Financial Details**
+
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+# Check distribution of financial columns
+summary(Train_Beneficiary[,c('IPAnnualReimbursementAmt', 'IPAnnualDeductibleAmt', 'OPAnnualReimbursementAmt', 'OPAnnualDeductibleAmt')])
+```
+
+
+```{r warning=FALSE, echo = FALSE}
+financial_cols <- Train_Beneficiary[,c('IPAnnualReimbursementAmt', 'IPAnnualDeductibleAmt', 'OPAnnualReimbursementAmt', 'OPAnnualDeductibleAmt')]
+
+ggplot(gather(financial_cols), aes(x=value)) +
+  geom_histogram(bins=30, fill="#062e3e", alpha=0.7) +
+  facet_wrap(~key, scales="free") +
+  theme_minimal() +
+  theme_economist() +
+  labs(x='Value', y='Frequency', title='Distribution of Financial Columns')
+```
+
+
+
+```{r warning=FALSE, echo = FALSE}
+# Create the correlation plot
+cor.plot(financial_cols, labels = rep("", ncol(financial_cols)))
+```
+**Figure 6.** The Distribution and correlation of Financial Columns in the Train_Beneficiary dataset.
+
+
+The financial attributes section demonstrates a right-skewed distribution, with most beneficiaries having lower annual reimbursements and deductibles, while only a very small minority has higher values. This reflects the general health condition of the beneficiaries. However, the high-value outliers require further scrutiny to uncover potential fraudulent activities. Furthermore, the significant correlations among various financial columns highlight the crucial role of annual reimbursements and deductibles in fraud detection.
+
+**2.2.6 Critical Event Information-Date of death**
+
+```{r warning=FALSE, echo = FALSE}
+
+# Convert yOB to datetime format and extract year
+Train_Beneficiary$DOD <- as.Date(Train_Beneficiary$DOD, format="%Y-%m-%d")
+# find the year of death
+Train_Beneficiary$Year_of_Death <- as.numeric(format(Train_Beneficiary$DOD, "%Y"))
+
+non_na_yod <- Train_Beneficiary[complete.cases(Train_Beneficiary$Year_of_Death),]
+
+# check the distribution of DOD
+
+ggplot(data = non_na_yod, aes(x = DOD)) +
+  geom_histogram(binwidth = 30, fill = "#31313d", alpha = 0.7) +
+  xlab('Date of Death') +
+  ylab('Frequency') +
+  ggtitle('Distribution of Date of Death')
+
+```
+
+**Figure 7.** The Distribution of Date of Death in the Train_Beneficiary dataset.
+
+The dataset signifies a uniformity in the recorded year of death, pinpointed to the year 2009. This trend perhaps is a consequence of the dataset's restriction to the data documented in the year 2009, with a noteworthy concentration of death occurrences in December and the latter half of the year. 
+
+
+
+--- 
+
+### 2.3 Inpatient and Outpatient Data Overview and Data Pre-processing
+
+
+In the endeavor to unravel nuanced insights into healthcare fraud detection, the analysis extends to a comprehensive review of inpatient and outpatient data, facilitating a meticulous approach to identifying unusual patterns that may indicate fraudulent activities. This section explicates the methodology and observations gleaned from data pre-processing and analysis.
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+# Check the distribution and basic information of Train_Inpatientdata dataset
+summary(Train_Inpatient)
+str(Train_Inpatient)
+```
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+# Check the distribution and basic information of Train_Outpatientdata dataset
+summary(Train_Outpatient)
+str(Train_Outpatient)
+```
+
+
+**2.3.1 Merging Inpatient and Outpatient Datasets**
+
+The merging of Train_Inpatient and Train_Outpatient data is intended to present the medical journeys of patients. This merger includes 558,211 rows and 30 columns, allowing for a detailed examination of each beneficiary's medical encounters. It reveals patterns and correlations that may remain hidden when analyzed separately. This helps identify unusual claims patterns and marks cases for further investigation, thereby enhancing the integrity of the healthcare sector.
+
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+claim_inoutPatient <- bind_rows(Train_Inpatient, Train_Outpatient)
+
+head(claim_inoutPatient)
+```
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+# check the shape of the dataset
+dim(Train_Inpatient)
+dim(Train_Outpatient)
+dim(claim_inoutPatient)
+```
+
+
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+# merge the claim_inoutPatient with Train dataset to get the PotentialFraud column
+claim_inoutPatient <- merge(claim_inoutPatient, Train, by = "Provider", all.x = TRUE)
+
+```
+
+
+
+
+
+**2.3.2 BeneID, ClaimID, Provider**
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+
+data <- claim_inoutPatient
+
+# Count of unique beneficiaries
+unique_bene_count <- data %>% 
+  summarise(n_distinct(BeneID))
+
+# Distribution of the number of claims per beneficiary
+claims_per_bene <- data %>%
+  group_by(BeneID) %>%
+  tally(name = "ClaimCount") %>%
+  ungroup()
+
+# Identify unusually high numbers of claims per beneficiary
+unusual_claims_per_bene <- claims_per_bene %>%
+  filter(ClaimCount > quantile(ClaimCount, 0.99)) 
+
+# Count of unique claims
+unique_claim_count <- data %>% 
+  summarise(n_distinct(ClaimID))
+
+# Count of unique providers
+unique_provider_count <- data %>% 
+  summarise(n_distinct(Provider))
+
+# Distribution of the number of claims per provider
+claims_per_provider <- data %>%
+  group_by(Provider) %>%
+  tally(name = "ClaimCount") %>%
+  ungroup()
+
+# Identify providers associated with a high number of claims
+high_claim_providers <- claims_per_provider %>%
+  filter(ClaimCount > quantile(ClaimCount, 0.99)) 
+# Print the results
+print(list(
+  unique_bene_count = unique_bene_count,
+  claims_per_bene_dist = summary(claims_per_bene$ClaimCount),
+  unusual_claims_per_bene = unusual_claims_per_bene,
+  unique_claim_count = unique_claim_count,
+  unique_provider_count = unique_provider_count,
+  claims_per_provider_dist = summary(claims_per_provider$ClaimCount),
+  high_claim_providers = high_claim_providers
+))
+
+```
+
+
+```{r warning=FALSE, message=FALSE, echo=FALSE}
+
+# Assign the plots to variables
+unusual_claims <- ggplot(unusual_claims_per_bene, aes(x = ClaimCount)) +
+  geom_histogram(binwidth = 1, fill = "#2a2a71", alpha = 0.7) +
+  labs(title = "Distribution of Unusual Claims per Beneficiary", x = "Claim Count", y = "Frequency")
+
+claim_providers <- ggplot(high_claim_providers, aes(x = ClaimCount)) +
+  stat_ecdf(geom = "step", size = 1.5, colour = "navy") +
+  labs(title = "Cumulative Density of High Claim Providers", x = "Claim Count", y = "Cumulative Density")
+
+# Use grid.arrange to put both plots in one
+grid.arrange(unusual_claims, claim_providers, nrow=2)
+
+```
+
+**Figure 8.** The Distribution of Unusual Claims per Beneficiary and Cumulative Density of High Claim Providers in the Train_Inpatient and Train_Outpatient dataset.
+
+Examining the dataset, we find 138,556 unique beneficiaries, 558,211 unique claims, and 5,410 different providers. Notably, the average claim value per beneficiary is around 4.029, which helps identify unusual claim patterns and improves fraud detection precision. Additionally, filtering out data entries above the 99th percentile narrows down beneficiaries and providers with high claim counts for closer inspection.
+
+The Cumulative Density Plot (CDP) shows a transition zone, indicating a shift from common to higher claim counts, possibly suggesting a gradual increase in unusual claims. This area, especially when claim counts exceed 4,000, is crucial for further investigation, highlighting providers who significantly deviate from the norm.
+
+
+**2.3.3 Reimbursed and Deductible Amounts**
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+str(claim_inoutPatient)
+```
+
+
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+reimbursed_stats <- summary(data$InscClaimAmtReimbursed)
+reimbursed_stats
+```
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+deductibl_stats <- summary(data$DeductibleAmtPaid)
+deductibl_stats
+```
+
+
+```{r warning=FALSE, message=FALSE, echo=FALSE}
+reimbursed <- ggplot(data, aes(x = InscClaimAmtReimbursed)) +
+  stat_ecdf(geom = "step",size = 1.5, colour = "navy") +
+  scale_x_continuous(trans='log2') +
+  labs(title = "Cumulative Density of Reimbursed Amounts", x = "Reimbursed Amounts (log scale)", y = "Cumulative Density")
+
+deductibl <- ggplot(data, aes(x = DeductibleAmtPaid)) +
+  geom_density(fill = "#71081d", alpha = 0.7) +
+  labs(title = "Distribution of Deductible Amounts", x = "Deductible Amounts", y = "Density")
+
+# Use grid.arrange to put both plots in one
+grid.arrange(reimbursed, deductibl, nrow=2)
+```
+
+**Figure 9.** The Cumulative Density of Reimbursed Amounts and Distribution of Deductible Amounts in the Train_Inpatient and Train_Outpatient dataset.
+
+The data indicates that most claims have low reimbursement amounts, but sometimes there are very high amounts, which might be due to fraud or errors. In medical provider fraud detection, these irregularities could be red flags and need closer scrutiny to prevent fraud or billing mistakes. Also, many people have zero deductible amounts, meaning they don't have to pay deductibles. However, some individuals have unusually high deductibles, which are quite different from the norm. This emphasizes the need for strong methods to spot these unusual cases.
+
+
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+
+library(lubridate)
+
+data <- data %>%
+  mutate(
+    ClaimStartDt = ymd(ClaimStartDt),
+    ClaimEndDt = ymd(ClaimEndDt)
+  )
+```
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+monthly_frequency <- data %>%
+  group_by(Month = floor_date(ClaimStartDt, "month")) %>%
+  summarise(ClaimCount = n())
+
+# Plot the monthly frequency of claims
+d1 <- ggplot(monthly_frequency, aes(x = Month, y = ClaimCount)) +
+  geom_line(size = 1.5) +
+  labs(title = "Monthly Frequency of Claims", x = "Month", y = "Number of Claims")
+```
+
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+monthly_reimbursed <- data %>%
+  group_by(Month = floor_date(ClaimStartDt, "month")) %>%
+  summarise(TotalReimbursed = sum(InscClaimAmtReimbursed, na.rm = TRUE))
+
+# Plot
+d2<- ggplot(monthly_reimbursed, aes(x = Month, y = TotalReimbursed)) +
+  geom_line(size=1.5) +
+  labs(title = "Monthly Reimbursed Amount Analysis", x = "Month", y = "Total Reimbursed Amount")
+```
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+# Duration of Claims
+data <- data %>%
+  mutate(
+    ClaimDuration = as.numeric(difftime(ClaimEndDt, ClaimStartDt, units = "days"))
+  )
+
+# Plot the distribution of claim durations
+d3 <- ggplot(data, aes(x = ClaimDuration)) +
+  geom_histogram(binwidth = 1, fill = "#2a2a71", alpha = 0.7) +
+  labs(title = "Distribution of Claim Durations", x = "Claim Duration (Days)", y = "Frequency")
+```
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+# Merge the plots
+grid.arrange(d1, d2, d3, ncol=1)
+```
+
+
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+Train_claim <- data
+```
+
+
+
+
+---
+
+### 2.4. Merge Dataset and Data Cleaning
+
+
+This dataset has 558,211 records and 54 features. 'ClaimID' identifies each claim, and 'BeneID' distinguishes each beneficiary for monitoring their medical situations and claims.
+
+To prepare the data for analysis, we made some changes. We converted binary values (0 and 1) in the 'Gender' column into numbers. In the 'RenalDiseaseIndicator' column, 'Y' became '1' to show renal disease, while others stayed the same. 
+
+We filled empty values in the 'DeductibleAmtPaid' column with '0'. Lastly, in the 'PotentialFraud' column, 'Yes' turned into '1' for potential fraud, and everything else became '0'. These steps made the dataset consistent and ready for analysis.
+
+
+```{r warning=FALSE, message=FALSE, echo=FALSE}
+# merge the Train_claim with Train_Beneficiary dataset to get the demographic information
+Train_claim <- merge(Train_claim, Train_Beneficiary, by = "BeneID", all.x = TRUE)
+
+```
+
+```{r warning=FALSE, message=FALSE, echo=FALSE}
+# remove NoOfMonths_PartACov and NoOfMonths_PartBCov columns as they are not useful
+Train_claim <- Train_claim[, !names(Train_claim) %in% c("NoOfMonths_PartACov", "NoOfMonths_PartBCov")]
+# remove Decade, year of birth and date of death columns as they are added to the dataset for analysis purpose and will be correlated with the source variables
+Train_claim <- Train_claim[, !names(Train_claim) %in% c("Decade", "Year_of_Birth", "Year_of_Death")]
+```
+
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+
+head(Train_claim)
+# check the shape of the dataset
+dim(Train_claim)
+str(Train_claim)
+```
+
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+# replace the binary values with 0 and 1
+Train_claim$Gender <- as.numeric(Train_claim$Gender) - 1
+# RenalDiseaseIndicator  0 = No, 1 = Yes
+Train_claim$RenalDiseaseIndicator <- ifelse(Train_claim$RenalDiseaseIndicator == 'Y', 1, Train_claim$RenalDiseaseIndicator)
+
+# impute missing values in 'DeductibleAmtPaid' with the mode
+Train_claim$DeductibleAmtPaid[is.na(Train_claim$DeductibleAmtPaid)] <- 0
+
+# PotentialFraud 0 = No, 1 = Yes
+Train_claim$PotentialFraud <- ifelse(Train_claim$PotentialFraud == 'Yes', 1, 0)
+
+```
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+# check the head of the dataset
+head(Train_claim)
+```
+
+
+```{r warning=FALSE, message=FALSE, echo=FALSE}
+
+skim(Train_claim) %>%
+  dplyr::select(skim_type, skim_variable, n_missing, numeric.mean, numeric.sd, numeric.p0,  numeric.p50, numeric.p100) %>%
+  mutate_at(vars(starts_with("numeric.")), ~sprintf("%.2f", .)) %>%
+  kable(caption = "Summary Statistics for Variables in Train Dataset")
+```
+
+---
+
+## 3. Missing Data Analysis and Intervention
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+# find the columns with missing values and their percentage
+# Find columns with missing values
+missing_columns <- colnames(Train_claim)[colSums(is.na(Train_claim)) > 0]
+
+# Calculate the percentage of missing values in each column
+missing_percentage <- colMeans(is.na(Train_claim)) * 100
+
+missing_percentage
+```
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+# Set a threshold for missing data percentage 
+threshold <- 95
+
+# Identify columns with missing values exceeding the threshold
+columns_to_remove <- colnames(Train_claim)[missing_percentage > threshold]
+
+# Remove the identified columns from the dataset
+Train_claim <- Train_claim[, !colnames(Train_claim) %in% columns_to_remove]
+
+```
+
+
+```{r include=FALSE, warning=FALSE, message=FALSE }
+# check the shape of the dataset
+dim(Train_claim)
+head(Train_claim)
+```
+
+
+
+
+
+**3.1.1. Management of Missing Data**
+
+In proficiently navigating missing data within the healthcare fraud detection paradigm, a structured methodology was employed. A significant threshold of 95% was instituted for potential column elimination, ensuring data reliability whilst diminishing irrelevant fluctuations.
+
+Noteworthy percentages of missing data in the 'AdmissionDt' and 'DischargeDt' columns (approximately 92.75%) are logically accounted for, as they encapsulate substantial events from 2009. These columns are essential in formulating the 'length of stay' feature, a crucial aspect in fraud detection examinations.
+
+Furthermore, the 'ClmDiagnosisCode_2-10' columns encapsulate a range of medical conditions, warranting the varying missing values. Here, applying domain knowledge prudently is vital in determining their retention, consequently augmenting the fraud detection model's accuracy and efficiency.
+
+Columns possessing over 30% missing values are provisionally segregated from the original dataset, while columns with less than 30% missing values are retained for imputation.
+
+
+```{r warning=FALSE, message=FALSE,include=FALSE}
+# install.packages("VIM")
+pacman::p_load(VIM)
+```
+
+```{r warning=FALSE, message=FALSE, echo=FALSE}
+# Visualize missing data after removing columns with missing values exceeding the threshold
+missing <- aggr(Train_claim, col=c("#202063", "#ff8800"),
+                numbers = TRUE, sortVars = TRUE,
+                lables=names(Train_claim), cex.axis=.6,
+                gap=3, ylab=c("Missing data", "Pattern"))
+```
+
+**Figure 10.** The Distribution of Missing Data in the Train_claim dataset.
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+# seperate the columns with over 30% missing values into a new dataset
+Train_claim_30 <- Train_claim[, colMeans(is.na(Train_claim)) > 0.3]
+# remove the columns with over 30% missing values from the original dataset
+Train_claim <- Train_claim[, !colnames(Train_claim) %in% colnames(Train_claim_30)]
+
+# check the shape of the dataset
+dim(Train_claim)
+dim(Train_claim_30)
+```
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+head(Train_claim_30)
+```
+
+
+
+
+**3.1.2. Procedure for Missing Data Imputation**
+
+From the observed pattern of missing data, it is evident that the missing values are not absent completely at random (MCAR). These missing values bear relations to other variables, albeit not with the missing data variable. Hence, the Multiple Imputation by Chained Equations (MICE) method will be deployed to address the missing values less than 30%. This approach leverages other variables within the dataset to derive missing values, employing the mice package in R for implementation.
+
+- m = 5, denotes the generation of five imputed datasets, providing a spectrum of values instead of a singular prediction.
+- maxit = 50, indicates the iterative rounds undertaken for missing values imputation.
+- The mean matching method is adopted for imputation.
+  
+
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+# Impute missing values
+imputed_data <- mice(Train_claim, m=5, maxit=50, method='pmm')
+
+summary(imputed_data)
+```
+
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+# Select second complete dataset (out of 5)
+imputed_complete <- complete(imputed_data, 2)
+```
+
+
+
+```{r warning=FALSE, message=FALSE, include=FALSE, eval=FALSE}
+# Getting top N categories
+N <- 20
+
+top_ClmDiagnosisCode_1 <- head(sort(table(Train_claim$ClmDiagnosisCode_1), decreasing = TRUE), n = N)
+top_AttendingPhysician <- head(sort(table(Train_claim$AttendingPhysician), decreasing = TRUE), n = N)
+
+# Filtering the data frame to include only top N categories
+Train_claim_filtered_ClmDiagnosisCode_1 <- Train_claim[Train_claim$ClmDiagnosisCode_1 %in% names(top_ClmDiagnosisCode_1), ]
+Train_claim_filtered_AttendingPhysician <- Train_claim[Train_claim$AttendingPhysician %in% names(top_AttendingPhysician), ]
+
+# Plotting with ggplot
+imp1 <- ggplot(data = Train_claim_filtered_ClmDiagnosisCode_1, aes(x = ClmDiagnosisCode_1)) + 
+  geom_bar() + 
+  ggtitle("Top 20 ClmDiagnosisCode_1") + 
+  xlab("ClmDiagnosisCode_1") + 
+  ylab("Count") +
+  theme_minimal()+
+  theme_economist()
+
+imp2 <- ggplot(data = Train_claim_filtered_AttendingPhysician, aes(x = AttendingPhysician)) + 
+  geom_bar() + 
+  ggtitle("Top 20 AttendingPhysician") + 
+  xlab("AttendingPhysician") + 
+  ylab("Count") +
+  theme_minimal()+
+  theme_economist()+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+# merge the two plots
+grid.arrange(imp1, imp2, nrow=2)
+```
+
+
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+Train_claim <- imputed_complete
+```
+
+---
+
+## 4. Feature Selection
+
+In this section, filter methods are utilized for selecting pertinent features, leveraging the mlr3 package to facilitate the implementation of this approach. Through a rigorous analysis, it becomes discernible which features serve as substantial predictors in the model, while also identifying those which offer limited contribution to the prediction of the target variable, based on the criteria of information gain.
+
+Upon examining the scores, it is evident that certain features manifest high scores, implying their potential as significant predictors in the model. Specifically, features such as 'ClaimID', 'Provider', and 'AttendingPhysician' have surfaced as potential powerhouse predictors, holding substantial influence in determining the outcome of the target variable.
+
+In contrast, features with scores nearing or equating to zero demonstrate negligible impact on the target variable. It has been observed that features including 'ChronicCond_Cancer', 'ChronicCond_Depression', and 'Gender', exert little to no influence on the predictive capability of the model, adhering to the parameters set by the information gain criterion.
+
+Moving forward, a strategic approach will be adopted where features manifesting high scores will be given priority during the model development phase. This strategy is grounded on data-driven insights and aims to enhance the model's predictive accuracy by focusing on significant predictors, thereby avoiding potential noise generated by irrelevant features.
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+# install.packages("mlr3")
+pacman::p_load(mlr3, mlr3learners, mlr3viz, mlr3filters, FSelectorRcpp, mlr3pipelines)
+pacman::p_load(data.table)
+```
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+# change all character columns to factor
+
+Train_claim <- Train_claim %>%
+  mutate(across(where(is.character), as.factor))
+
+```
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+# Setting the seed for reproducibility
+set.seed(999)
+
+# Converting date columns to factor type
+Train_claim$ClaimStartDt <- as.factor(Train_claim$ClaimStartDt)
+Train_claim$ClaimEndDt <- as.factor(Train_claim$ClaimEndDt)
+Train_claim$DOB <- as.factor(Train_claim$DOB)
+
+# Converting target column to factor
+Train_claim$PotentialFraud <- as.factor(Train_claim$PotentialFraud)
+
+# Creating a Task object from the Train_claim dataset
+claim_task <- TaskClassif$new(id = "Train_claim", backend = Train_claim, target = "PotentialFraud")
+
+# Creating a new filter method and calculating the feature importance
+filter_importance <- flt("information_gain")
+claim_feature_importance <- filter_importance$calculate(claim_task)
+
+# Converting the feature importance to a data.table
+as.data.table(claim_feature_importance)
+```
+
+
+
+```{r warning=FALSE, message=FALSE, echo=FALSE}
+autoplot(claim_feature_importance)
+```
+
+**Figure 11.** The Feature Importance Plot in the Train_claim dataset.
+
+
+
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+# remove the columns with low feature importance
+# ChronicCond_Cancer,ChronicCond_Depression, Gender ,ChronicCond_rheumatoidarthritis,ChronicCond_Osteoporasis, ChronicCond_Diabetes,ChronicCond_Alzheimer   
+# Create a new data frame without the specified columns
+Train_claim_cleaned <- subset(Train_claim, select = -c(ChronicCond_Cancer, ChronicCond_Depression, Gender, ChronicCond_rheumatoidarthritis, ChronicCond_Osteoporasis, ChronicCond_Diabetes, ChronicCond_Alzheimer))
+
+# Check the structure of the cleaned data frame
+str(Train_claim_cleaned)
+dim(Train_claim_cleaned)
+summary(Train_claim_cleaned)
+```
+
+
+**Table 3.** Selected Features from the Feature Selection Process.
+
+Selected Features
+====================
+
+| Sections                                       | Details                                                                                                    |
+|------------------------------------------------|------------------------------------------------------------------------------------------------------------|
+| BeneID                                         | Unique identifiers for beneficiaries. Categorical variable.                                                |
+| Provider                                       | Unique identifiers for healthcare providers. Categorical variable.                                         |
+| ClaimID                                        | Unique identifiers for claims. Categorical variable.                                                        |
+| ClaimStartDt and ClaimEndDt                    | Start and end dates of claims, ranging from November 27, 2008, to December 31, 2009. Datetime variables.  |
+| InscClaimAmtReimbursed                         | Amount reimbursed for insurance claims. Continuous variable with a range from 0 to 125,000.              |
+| AttendingPhysician                             | Names or identifiers of attending physicians. Categorical variable.                                         |
+| ClmAdmitDiagnosisCode                         | Diagnosis codes related to admission. Categorical variable.                                                 |
+| DeductibleAmtPaid                              | Deductible amount paid, ranging from 0 to 1,068.                                                            |
+| ClmDiagnosisCode_1                            | Additional diagnosis codes with a substantial number of missing values (10,453). Categorical variable.     |
+| PotentialFraud                                 | Binary variable indicating potential fraud (1) or no fraud (0). Not missing.                                |
+| ClaimDuration                                 | Duration of claims, ranging from 0 to 36.                                                                   |
+| DOB                                            | Date of birth of beneficiaries, ranging from January 1, 1909, to December 1, 1983. Datetime variable.     |
+| Gender                                         | Binary variable representing the gender of beneficiaries (0 or 1).                                           |
+| Race                                           | Categorical variable with values 1, 2, 3, or 5.                                                             |
+| RenalDiseaseIndicator                         | Binary variable indicating the presence (1) or absence (0) of renal disease.                                |
+| State                                          | Categorical variable with multiple levels.                                                                  |
+| County                                         | Categorical variable with multiple levels.                                                                  |
+| Chronic Conditions                             | Binary variables indicating the presence or absence of various chronic conditions.                           |
+| IPAnnualReimbursementAmt and IPAnnualDeductibleAmt | Likely annual reimbursement amount and deductible amount for inpatient services.                             |
+| OPAnnualReimbursementAmt and OPAnnualDeductibleAmt | Likely annual reimbursement amount and deductible amount for outpatient services.                            |
+
+
+
+---
+
+## 5. Correlation analysis
+
+
+
+```{r warning=FALSE, message=FALSE, echo=FALSE}
+# Calculate the correlation matrix of all numeric variables
+correlation_matrix <- cor(Train_claim_cleaned[, sapply(Train_claim_cleaned, is.numeric)])
+
+
+pacman::p_load(gplots)
+# Create a heatmap of the correlation matrix
+heatmap(correlation_matrix, 
+        col = colorRampPalette(c("#060687", "white", "#a00606"))(20),
+        main = "Correlation Heatmap")
+```
+
+**Figure 12.** The Correlation Heatmap for the selected features.
+
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+print(correlation_matrix)
+```
+
+
+The analysis of different variables in the dataset shows different relationships. We found a strong positive relationship between insurance claim amounts and deductible amounts (correlation coefficient approximately 0.654). There's a moderate relationship (ranging from 0.226 to 0.384) among annual reimbursements, deductibles for inpatient services, and reimbursed amounts. Also, there's a weak relationship (less than 0.2) between annual reimbursements and deductibles for outpatient services.
+
+The data suggests that longer claim durations might have a small impact on reimbursed amounts and deductible payments, with ranging from 0.217 to 0.257. These different levels of relationships give us insights into how different factors are connected and can help us make better predictions.
+
+
+---
+
+## 6. Feature engineering
+
+
+### 6.1. Temporal  Features, Medical Condition and Other Features
+
+The narrative strategically develops crucial temporal features fundamental to building a robust predictive model. Initially, it delineates the formation of the 'Age at the Time of Claim' and 'Claim Processing Time' variables through arithmetic manipulations on existing columns in the 'Train_claim_cleaned' data frame, illustrating this using R programming snippets.
+
+Subsequently, the focus shifts to synthesizing a composite feature that encapsulates the severity of a patient's chronic conditions by aggregating data points from relevant columns, thus offering a detailed view of patients' health trajectories over time.
+
+Lastly, the discussion expands to the generation of varied features, crafted through advanced statistical and mathematical approaches. Here, transformative data science techniques take center stage, facilitating the creation of new variables through interaction features, polynomial features, and categorical binning, among others, thereby enhancing the data's dimensionality and paving the way for an in-depth analytical expedition.
+
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+Train_claim_cleaned$AgeAtTimeOfClaim <- as.numeric(difftime(Train_claim_cleaned$ClaimStartDt, Train_claim_cleaned$DOB, units = "weeks")) / 52.25
+```
+
+
+
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+Train_claim_cleaned$ClaimProcessingTime <- as.numeric(difftime(Train_claim_cleaned$ClaimEndDt, Train_claim_cleaned$ClaimStartDt, units = "days"))
+```
+
+
+
+
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+chronic_conditions <- c("ChronicCond_Heartfailure", "ChronicCond_KidneyDisease",  "ChronicCond_ObstrPulmonary", "ChronicCond_IschemicHeart", "ChronicCond_stroke")
+
+Train_claim_cleaned$ChronicConditionCount <- rowSums(Train_claim_cleaned[, chronic_conditions], na.rm = TRUE)
+
+```
+
+
+
+
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+# Interaction Feature: Create a new feature as the ratio of InscClaimAmtReimbursed to DeductibleAmtPaid
+Train_claim_cleaned$ReimbursementToDeductibleRatio <- Train_claim_cleaned$InscClaimAmtReimbursed / Train_claim_cleaned$DeductibleAmtPaid
+```
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+# Polynomial Feature: Create a squared term for ClaimDuration
+# variables with moderate correlations to capture nonlinear relationships 
+Train_claim_cleaned$ClaimDurationSquared <- Train_claim_cleaned$ClaimDuration^2
+```
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+# Create bins based on manually defined bin edges
+Train_claim_cleaned$ReimbursementCategory <- cut(Train_claim_cleaned$InscClaimAmtReimbursed, 
+                                                 breaks = c(0, 100, 500, 1000, 5000, Inf),
+                                                 labels = c("Very Low", "Low", "Moderate", "High", "Very High"),
+                                                 include.lowest = TRUE)
+
+
+```
+
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+# Feature Scaling: Apply standardization to ClaimDuration
+mean_duration <- mean(Train_claim_cleaned$ClaimDuration)
+sd_duration <- sd(Train_claim_cleaned$ClaimDuration)
+Train_claim_cleaned$ClaimDurationStandardized <- (Train_claim_cleaned$ClaimDuration - mean_duration) / sd_duration
+```
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+# Feature Cross: Create a new feature combining ChronicCond_Heartfailure and ClaimDuration
+Train_claim_cleaned$HeartFailureDurationInteraction <- paste(Train_claim_cleaned$ChronicCond_Heartfailure, 
+                                                             Train_claim_cleaned$ClaimDuration, sep = "_")
+
+```
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+
+# Missing Value Indicator: Create a binary indicator for missing ClmDiagnosisCode_1
+Train_claim_cleaned$MissingDiagnosisCode <- as.integer(is.na(Train_claim_cleaned$ClmDiagnosisCode_1))
+```
+
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+str(Train_claim_cleaned)
+colnames(Train_claim_cleaned)
+```
+
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+pacman::p_load(e1071)
+numeric_columns <- sapply(Train_claim_cleaned, is.numeric)
+
+skewness_values <- sapply(Train_claim_cleaned[, numeric_columns], skewness)
+kurtosis_values <- sapply(Train_claim_cleaned[, numeric_columns], kurtosis)
+results <- data.frame(
+  Feature = names(Train_claim_cleaned[, numeric_columns]),
+  Skewness = skewness_values,
+  Kurtosis = kurtosis_values
+)
+print(results)
+
+```
+
+
+
+
+### 6.2. Features Transformation
+
+The transformation of features address the statistical nuances of skewness and kurtosis which play a pivotal role in moulding the efficacy of machine learning algorithms. The analytical spotlight here is on the marked skewness and kurtosis evident in the data, advocating for transformations, predominantly log transformations, to normalize the data distribution. This stride not only mitigates skewness but serves as a bulwark against the adverse effects of outliers, steering the data towards a more standardized landscape.
+
+
+**Table 4.** Skewness and Kurtosis Analysis for Features Transformation. 
+
+Skewness Data Details
+=====================
+
+| Variable               | Skewness Value |
+|------------------------|----------------|
+| InscClaimAmtReimbursed | 9.49           |
+| DeductibleAmtPaid      | 3.33           |
+| ClaimDuration          | 3.16           |
+| IPAnnualReimbursementAmt | 3.99          |
+| IPAnnualDeductibleAmt  | 8.16           |
+| OPAnnualReimbursementAmt | 5.52          |
+| OPAnnualDeductibleAmt  | 4.36           |
+| MissingDiagnosisCode   | 7.10           |
+
+
+Kurtosis Data Details
+=====================
+
+| Variable                  | Kurtosis Value |
+|---------------------------|----------------|
+| InscClaimAmtReimbursed    | 136.58         |
+| DeductibleAmtPaid         | 9.11           |
+| ClaimDuration             | 9.25           |
+| ChronicCond_stroke        | 4.94           |
+| IPAnnualReimbursementAmt  | 23.04          |
+| IPAnnualDeductibleAmt     | 158.20         |
+| OPAnnualReimbursementAmt  | 51.02          |
+| OPAnnualDeductibleAmt     | 26.17          |
+| ClaimDurationSquared      | 26.98          |
+| ClaimDurationStandardized | 9.25           |
+| MissingDiagnosisCode      | 48.42          |
+
+
+
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+
+# Log transformation for Skewness Analysis columns
+Train_claim_cleaned$InscClaimAmtReimbursed <- log(Train_claim_cleaned$InscClaimAmtReimbursed + 1)
+Train_claim_cleaned$DeductibleAmtPaid <- log(Train_claim_cleaned$DeductibleAmtPaid + 1)
+Train_claim_cleaned$ClaimDuration <- log(Train_claim_cleaned$ClaimDuration + 1)
+Train_claim_cleaned$IPAnnualReimbursementAmt <- log(Train_claim_cleaned$IPAnnualReimbursementAmt + 1)
+Train_claim_cleaned$IPAnnualDeductibleAmt <- log(Train_claim_cleaned$IPAnnualDeductibleAmt + 1)
+Train_claim_cleaned$OPAnnualReimbursementAmt <- log(Train_claim_cleaned$OPAnnualReimbursementAmt + 1)
+Train_claim_cleaned$OPAnnualDeductibleAmt <- log(Train_claim_cleaned$OPAnnualDeductibleAmt + 1)
+
+# Log transformation for Kurtosis Analysis columns
+Train_claim_cleaned$ChronicCond_stroke <- log(Train_claim_cleaned$ChronicCond_stroke + 1)
+
+# Log transformation for ClaimDurationSquared with a check for values greater than zero
+Train_claim_cleaned$ClaimDurationSquared <- log(Train_claim_cleaned$ClaimDurationSquared + 1)
+
+# Log transformation for ClaimDurationStandardized with a check for values greater than zero
+Train_claim_cleaned$ClaimDurationStandardized <- log(Train_claim_cleaned$ClaimDurationStandardized + 1)
+
+```
+
+
+
+---
+
+## 7. Export Data to CSV
+
+You can request the generated CSV file by emailing us at the university email address.
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+str(Train_claim_cleaned)
+```
+
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+# Export the cleaned dataset to csv
+write.csv(Train_claim_cleaned, "Train_claim_cleaned.csv", row.names = FALSE)
+```
+
+--- 
+
+
+
+## References: 
+
+[1] A. Bhardwaj, S. Kumar and A. Naidu, "Predictive analysis and supervised detection for fraudulent cases in healthcare," 2022 12th International Conference on Cloud Computing, Data Science & Engineering (Confluence), Noida, India, 2022, pp. 416-421, doi: 10.1109/Confluence52989.2022.9734195.
+
+[2] V. Rawte and G. Anuradha, "Fraud detection in health insurance using data mining techniques," 2015 International Conference on Communication, Information & Computing Technology (ICCICT), Mumbai, India, 2015, pp. 1-5, doi: 10.1109/ICCICT.2015.7045689.
+
+
+[3] J. M. Johnson and T. M. Khoshgoftaar, "Healthcare Provider Summary Data for Fraud Classification" 2022 IEEE 23rd International Conference on Information Reuse and Integration for Data Science (IRI), San Diego, CA, USA, 2022, pp. 236-242, doi: 10.1109/IRI54793.2022.00060.
+
+[4] N. Agrawal and S. Panigrahi, "A Comparative Analysis of Fraud Detection in Healthcare using Data Balancing & Machine Learning Techniques" 2023 International Conference on Communication, Circuits, and Systems (IC3S), BHUBANESWAR, India, 2023, pp. 1-4, doi: 10.1109/IC3S57698.2023.10169634.
+
+[5] V. K et al., "Predicting health insurance claim frauds using supervised machine learning technique" 2023 Eighth International Conference on Science Technology Engineering and Mathematics (ICONSTEM), Chennai, India, 2023, pp. 1-7, doi: 10.1109/ICONSTEM56934.2023.10142604.
+
+[6] Ganjeer, P. R. (2023). Healthcare Fraud Detection Using Machine Learning. Retrieved from https://pulkitratnaganjeer.medium.com/healthcare-fraud-detection-using-machine-learning-5996d63bd3c7

@@ -1,0 +1,244 @@
+---
+title: |
+  | INFS_SP5_2023
+  | Predictive Analytics
+  | Assignment 3 
+  | Classification
+
+author: 
+  - "Huining Huang: huahy057@mymail.unisa.edu.au" 
+output: 
+  pdf_document:
+    toc: true
+editor_options:
+  chunk_output_type: console
+---
+
+
+
+```{r echo = FALSE, include=FALSE}
+# clear all variables, functions, etc
+# clean up memory
+rm(list=ls())
+# clean up memory
+gc()
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  fig.width = 8, 
+  fig.asp = 0.618, 
+  out.width = "80%",
+  fig.align = "center", 
+  root.dir = "../",
+  message = FALSE,
+  size = "small"
+)
+```
+
+
+```{r warning=FALSE, include=FALSE}
+pacman::p_load(tidyverse)
+pacman::p_load(knitr,dplyr,AICcmodavg)
+pacman::p_load(inspectdf,tidyr,stringr, stringi,DT,mice)
+pacman::p_load(caret,modelr)
+pacman::p_load(mlbench,mplot)
+pacman::p_load(tidymodels,glmx)
+pacman::p_load(skimr,vip,yardstick,ranger,kknn,funModeling,Hmisc)
+pacman::p_load(ggplot2,ggpubr,GGally)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+
+
+```{r warning=FALSE, include=FALSE}
+# Decision tree
+pacman::p_load(rpart.plot)
+
+# Data manipulation
+pacman::p_load(rgl, rattle, mice, dplyr, tidyverse)
+
+# Plotting
+pacman::p_load(viridis, hrbrthemes, ggplot2, heplots, ggpubr, forcats)
+```
+
+```{r warning=FALSE, include=FALSE}
+# Load from CSV files
+train <- read.csv("train_important.csv")
+validation <- read.csv("validation_important.csv")
+test <- read.csv("test_important.csv")
+```
+
+```{r warning=FALSE, include=FALSE}
+head(train)
+```
+
+
+
+
+
+employing ensemble methods like Gradient Boosting or AdaBoost allows to potentially improve upon the performance of the individual models previously built. In a pivot study, you would use insights gained from the simpler models to fine-tune these more complex, powerful methods. This is where your initial XGBoost model fits in, as it's a type of gradient boosting.
+
+```{r warning=FALSE, include=FALSE}
+pacman::p_load(xgboost)
+```
+
+
+```{r warning=FALSE, include=FALSE}
+library(xgboost)
+library(caret)
+
+# Ensure that PotentialFraud is the last column in your dataset
+dtrain <- xgb.DMatrix(data = as.matrix(train[,-ncol(train)]), label = train$PotentialFraud)
+
+# Expanded parameter grid
+param_grid <- expand.grid(
+  max_depth = c(10, 15, 30),  # Expanded range for max_depth
+  min_child_weight = c(1, 3, 6),  # Expanded range for min_child_weight
+  gamma = c(0, 0.1, 0.2),  # Added gamma parameter
+  subsample = 0.8,  # Added subsample parameter
+  colsample_bytree = 0.8,  # Added colsample_bytree parameter
+  eta = c(0.01, 0.05, 0.1),  # Expanded range for eta
+  nrounds = 10  # Increased number of boosting rounds
+)
+
+# number of folds for cross-validation
+cv.nfold <- 3
+
+# Grid search with early stopping
+best_model <- NULL
+best_performance <- Inf
+best_params <- NULL
+
+for(i in 1:nrow(param_grid)) {
+  params <- list(
+    objective = "binary:logistic",
+    max_depth = param_grid$max_depth[i],
+    min_child_weight = param_grid$min_child_weight[i],
+    gamma = param_grid$gamma[i],
+    subsample = param_grid$subsample[i],
+    colsample_bytree = param_grid$colsample_bytree[i],
+    eta = param_grid$eta[i]
+  )
+  
+  model <- xgb.train(params = params, data = dtrain, nrounds = param_grid$nrounds[i])
+  
+  # Evaluate the model using cross-validation
+  cv_results <- xgb.cv(
+    params = params, 
+    data = dtrain, 
+    nrounds = param_grid$nrounds[i], 
+    nfold = cv.nfold, 
+    metrics = "auc"
+  )
+  mean_auc <- mean(cv_results$evaluation_log$test_auc_mean)
+  print(paste("Iteration:", i, "mean_auc:", mean_auc, "best_performance:", best_performance))
+
+  # If the model performance is better, update best_model and best_performance
+  if(mean_auc < best_performance) {
+    best_performance <- mean_auc
+    best_model <- model
+    best_params <- params
+  }
+}
+
+# Check the best model
+best_model
+
+```
+
+
+```{r warning=FALSE, include=FALSE}
+# Check the best model
+best_model
+```
+
+> best_model
+##### xgb.Booster
+raw: 267.5 Kb
+call:
+  xgb.train(params = params, data = dtrain, nrounds = param_grid$nrounds[i])
+params (as set within xgb.train):
+  objective = "binary:logistic", max_depth = "10", min_child_weight = "6", gamma = "0", subsample = "0.8", colsample_bytree = "0.8", eta = "0.05", validate_parameters = "TRUE"
+xgb.attributes:
+  niter
+callbacks:
+  cb.print.evaluation(period = print_every_n)
+# of features: 28
+niter: 10
+nfeatures : 28
+
+the total number of iterations will be 3 (max_depth) * 3 (min_child_weight) * 3 (gamma) * 3 (eta) = 243 iterations. The code will train and evaluate XGBoost models for each of these 243 combinations to find the best-performing model based on mean AUC.
+
+```{r warning=FALSE, include=FALSE}
+# Save the best model
+saveRDS(best_model, "best_model_em2.rds")
+
+```
+
+
+
+
+
+
+### 1. Evaluate Model Performance
+To evaluate your `xgb.Booster` model, you'll need to make predictions on a validation or test dataset and then calculate the relevant metrics. Assuming you have a separate test dataset, you can proceed as follows:
+
+
+
+
+```{r warning=FALSE, include=FALSE}
+# Make predictions
+dtest <- xgb.DMatrix(data = as.matrix(test[,-ncol(test)]), label = test$PotentialFraud)
+preds <- predict(best_model, dtest)
+pred_labels <- ifelse(preds > 0.5, 1, 0) # Assuming 0.5 as the threshold
+
+# Calculate metrics
+conf_matrix <- table(Predicted = pred_labels, Actual = test$PotentialFraud)
+accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
+precision <- conf_matrix[2,2] / sum(conf_matrix[2,])
+recall <- conf_matrix[2,2] / sum(conf_matrix[,2])
+f1_score <- 2 * precision * recall / (precision + recall)
+
+# For AUC
+library(pROC)
+roc_obj <- roc(response = test$PotentialFraud, predictor = preds)
+auc_value <- auc(roc_obj)
+```
+
+
+
+
+```{r warning=FALSE, include=FALSE, echo=FALSE}
+# Print the metrics
+print("Confusion Matrix:")
+print(conf_matrix)
+print(paste("Accuracy:", round(accuracy, 4)))
+print(paste("Precision:", round(precision, 4)))
+print(paste("Recall:", round(recall, 4)))
+print(paste("F1-Score:", round(f1_score, 4)))
+print(paste("AUC:", round(auc_value, 4)))
+```
+
+
+> # Print the metrics
+> print("Confusion Matrix:")
+[1] "Confusion Matrix:"
+> print(conf_matrix)
+         Actual
+Predicted     0     1
+        0 30429 11749
+        1  4056  9588
+> print(paste("Accuracy:", round(accuracy, 4)))
+[1] "Accuracy: 0.7169"
+> print(paste("Precision:", round(precision, 4)))
+[1] "Precision: 0.7027"
+> print(paste("Recall:", round(recall, 4)))
+[1] "Recall: 0.4494"
+> print(paste("F1-Score:", round(f1_score, 4)))
+[1] "F1-Score: 0.5482"
+> print(paste("AUC:", round(auc_value, 4)))
+[1] "AUC: 0.7591"
+

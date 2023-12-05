@@ -1,0 +1,207 @@
+---
+title: |
+  | INFS_SP5_2023
+  | Predictive Analytics
+  | Assignment 3 
+  | Classification
+
+author: 
+  - "Huining Huang: huahy057@mymail.unisa.edu.au" 
+output: 
+  pdf_document:
+    toc: true
+editor_options:
+  chunk_output_type: console
+---
+
+
+
+```{r echo = FALSE, include=FALSE}
+# clear all variables, functions, etc
+# clean up memory
+rm(list=ls())
+# clean up memory
+gc()
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  fig.width = 8, 
+  fig.asp = 0.618, 
+  out.width = "80%",
+  fig.align = "center", 
+  root.dir = "../",
+  message = FALSE,
+  size = "small"
+)
+```
+
+
+```{r warning=FALSE, include=FALSE}
+pacman::p_load(tidyverse)
+pacman::p_load(knitr,dplyr,AICcmodavg)
+pacman::p_load(inspectdf,tidyr,stringr, stringi,DT,mice)
+pacman::p_load(caret,modelr)
+pacman::p_load(mlbench,mplot)
+pacman::p_load(tidymodels,glmx)
+pacman::p_load(skimr,vip,yardstick,ranger,kknn,funModeling,Hmisc)
+pacman::p_load(ggplot2,ggpubr,GGally)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+
+
+```{r warning=FALSE, include=FALSE}
+
+pacman::p_load(keras)
+
+# Data manipulation
+pacman::p_load(rgl, rattle, mice, dplyr, tidyverse)
+
+# Plotting
+pacman::p_load(viridis, hrbrthemes, ggplot2, heplots, ggpubr, forcats)
+```
+
+```{r warning=FALSE, include=FALSE}
+# Load data
+data <- read.csv("data.csv", header = TRUE, sep = ",")
+nrow(data)
+names(data)
+# head(data)
+```
+
+---
+
+
+
+`keras`, which provides a high-level neural networks API.
+
+
+### 1. Pivot Study: Understanding Your Data with a Simple Network
+
+Start with a simple neural network to understand the basic behavior of the data.
+
+```{r warning=FALSE, include=FALSE}
+
+set.seed(123) # for reproducibility
+
+# Prepare the data
+data$target <- as.numeric(data$target) - 1  # Convert to binary (0 and 1)
+index <- createDataPartition(data$target, p = 0.8, list = FALSE)
+train_data <- data[index, ]
+test_data <- data[-index, ]
+
+# Define a simple model
+model <- keras_model_sequential() %>%
+  layer_dense(units = 16, activation = 'relu', input_shape = c(ncol(train_data) - 1)) %>%
+  layer_dense(units = 16, activation = 'relu') %>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+# Compile the model
+model %>% compile(
+  optimizer = 'adam',
+  loss = 'binary_crossentropy',
+  metrics = c('accuracy')
+)
+
+# Fit the model
+history <- model %>% fit(
+  as.matrix(train_data[, -ncol(train_data)]), train_data$target,
+  epochs = 10,
+  batch_size = 512,
+  validation_split = 0.2
+)
+```
+
+### 2. Model Construction and Parameter Optimization
+
+After understanding the basic behavior, expand the model and experiment with parameters.
+
+```R
+# Define a more complex model
+model <- keras_model_sequential() %>%
+  layer_dense(units = 64, activation = 'relu', input_shape = c(ncol(train_data) - 1)) %>%
+  layer_dense(units = 64, activation = 'relu') %>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+# Compile the model
+model %>% compile(
+  optimizer = optimizer_rmsprop(),
+  loss = 'binary_crossentropy',
+  metrics = c('accuracy')
+)
+
+# Fit the model with a callback to reduce overfitting (Early Stopping)
+callback <- callback_early_stopping(monitor = "val_loss", patience = 2)
+history <- model %>% fit(
+  as.matrix(train_data[, -ncol(train_data)]), train_data$target,
+  epochs = 100,
+  batch_size = 512,
+  validation_split = 0.2,
+  callbacks = list(callback)
+)
+```
+
+### 3. Evaluation Metrics
+
+Evaluate the model using test data to get metrics like accuracy, precision, recall, F1 score.
+
+```R
+# Evaluate the model
+evaluation <- model %>% evaluate(
+  as.matrix(test_data[, -ncol(test_data)]), test_data$target
+)
+
+# Print the evaluation metrics
+print(evaluation)
+```
+
+### 4. Model Insights
+
+Gain insights into your model by analyzing the training process.
+
+```R
+plot(history)
+```
+
+### 5. Fine-Tuning for Enhanced Performance
+
+Adjust layers, units, learning rates, etc., to fine-tune the model.
+
+```R
+# Adjusting the model structure or learning rate
+model %>% compile(
+  optimizer = optimizer_rmsprop(lr = 0.0001),
+  loss = 'binary_crossentropy',
+  metrics = c('accuracy')
+)
+
+# Re-fit the model
+history <- model %>% fit(
+  as.matrix(train_data[, -ncol(train_data)]), train_data$target,
+  epochs = 50,
+  batch_size = 512,
+  validation_split = 0.2
+)
+```
+
+### 6. Examining Model's Efficacy
+
+Finally, compare the pre and post-tuned model performance to examine efficacy.
+
+```R
+# Re-evaluate the fine-tuned model
+fine_tuned_evaluation <- model %>% evaluate(
+  as.matrix(test_data[, -ncol(test_data)]), test_data$target
+)
+
+# Compare the evaluations
+print(paste("Initial Evaluation:", evaluation$accuracy))
+print(paste("Fine-Tuned Evaluation:", fine_tuned_evaluation$accuracy))
+```
+
+### Additional Considerations
+
+- **Data Preprocessing**: Ensure your data is properly preprocessed (normalized, one-hot encoded where necessary) for neural

@@ -1,0 +1,630 @@
+---
+title: |
+  | INFS_SP5_2023
+  | Predictive Analytics
+  | Assignment 3 
+  | Classification
+
+author: 
+  - "Huining Huang: huahy057@mymail.unisa.edu.au" 
+output: 
+  pdf_document:
+    toc: true
+editor_options:
+  chunk_output_type: console
+---
+
+
+
+```{r echo = FALSE, include=FALSE}
+# clear all variables, functions, etc
+# clean up memory
+rm(list=ls())
+# clean up memory
+gc()
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  fig.width = 8, 
+  fig.asp = 0.618, 
+  out.width = "80%",
+  fig.align = "center", 
+  root.dir = "../",
+  message = FALSE,
+  size = "small"
+)
+```
+
+
+```{r warning=FALSE, include=FALSE}
+pacman::p_load(tidyverse)
+pacman::p_load(knitr,dplyr,AICcmodavg)
+pacman::p_load(inspectdf,tidyr,stringr, stringi,DT,mice)
+pacman::p_load(caret,modelr)
+pacman::p_load(mlbench,mplot)
+pacman::p_load(tidymodels,glmx)
+pacman::p_load(skimr,vip,yardstick,ranger,kknn,funModeling,Hmisc)
+pacman::p_load(ggplot2,ggpubr,GGally)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+
+
+```{r warning=FALSE, include=FALSE}
+# Decision tree
+pacman::p_load(rpart.plot)
+
+# Data manipulation
+pacman::p_load(rgl, rattle, mice, dplyr, tidyverse)
+
+# Plotting
+pacman::p_load(viridis, hrbrthemes, ggplot2, heplots, ggpubr, forcats)
+```
+
+```{r warning=FALSE, include=FALSE}
+# Load data
+data <- read.csv("data.csv", header = TRUE, sep = ",")
+nrow(data)
+names(data)
+# head(data)
+```
+
+
+## Random Forests
+   - **Why Start Here**: Random Forests are generally robust and less prone to overfitting. They provide a good baseline and are relatively easy to implement and interpret. 
+   - **Insights Gained**: Random Forests can quickly give you an idea of the importance of different features in your dataset, which can be useful for refining subsequent models.
+
+
+**Data Splitting**
+
+
+```{r warning=FALSE, include=FALSE}
+set.seed(1000)  # Setting a seed for reproducibility
+
+total_rows <- nrow(data)
+train_size <- 0.8 * total_rows
+validation_size <- 0.1 * total_rows
+test_size <- 0.1 * total_rows
+
+# Splitting the data into train, validation, and test sets
+train_index <- sample(1:total_rows, train_size)
+remaining_data <- setdiff(1:total_rows, train_index)
+validation_index <- sample(remaining_data, validation_size)
+test_index <- setdiff(remaining_data, validation_index)
+
+train <- data[train_index, ]
+validation <- data[validation_index, ]
+test <- data[test_index, ]
+```
+
+
+```{r warning=FALSE, include=FALSE}
+# Move PotentialFraud to the last column in the train dataset
+train <- train[c(setdiff(names(train), "PotentialFraud"), "PotentialFraud")]
+
+# Move PotentialFraud to the last column in the test dataset
+test <- test[c(setdiff(names(test), "PotentialFraud"), "PotentialFraud")]
+
+validation <- validation[c(setdiff(names(validation), "PotentialFraud"), "PotentialFraud")]
+```
+
+
+```{r warning=FALSE, include=FALSE}
+head(train)
+```
+
+**Pivot Study**
+single decision tree model before building a Random Forest model. This will help understand the impact of different complexity parameters on model performance and provide a baseline for comparison with more complex models. 
+
+In the pivot study section, emphasize the need to avoid overfitting and the importance of balancing model complexity with predictive power:
+
+```{r warning=FALSE,include=FALSE}
+# Load required packages
+library(caret)
+library(rpart)
+
+# K-Fold Cross-Validation with a refined tuning grid
+tuning_grid <- expand.grid(cp = seq(0, 0.01, by = 0.001))  # More granularity in cp values
+train_control <- trainControl(method = "cv", number = 10)
+
+best_cp <- train(PotentialFraud ~ ., data = validation, 
+                method = "rpart",
+                trControl = train_control,
+                tuneGrid = tuning_grid)
+
+# Summary of cross-validation results
+print(best_cp)
+```
+
+
+CART
+
+55821 samples
+   35 predictor
+
+No pre-processing
+Resampling: Cross-Validated (10 fold)
+Summary of sample sizes: 50239, 50239, 50239, 50239, 50239, 50239, ...
+Resampling results across tuning parameters:
+
+  cp     RMSE       Rsquared    MAE
+  0.000  0.4616248  0.18251952  0.3246894
+  0.001  0.4392567  0.17898683  0.3845571
+  0.002  0.4558325  0.11585313  0.4147167
+  0.003  0.4616085  0.09332643  0.4257777
+  0.004  0.4626416  0.08925969  0.4279566
+  0.005  0.4671577  0.07142605  0.4363886
+  0.006  0.4695065  0.06202721  0.4404741
+  0.007  0.4714037  0.05439341  0.4442793
+  0.008  0.4744051  0.04235237  0.4499811
+  0.009  0.4754468  0.03816384  0.4520341
+  0.010  0.4754468  0.03816384  0.4520341
+
+RMSE was used to select the optimal model using the smallest value.
+The final value used for the model was cp = 0.001
+
+
+The results from the pivot study provide insightful information about how different complexity parameter (`cp`) values affect the performance of your decision tree model. Here's an analysis of what we can learn from these results:
+
+1. **Impact of CP on Model Performance**: The `cp` (complexity parameter) is crucial in controlling the size of the decision tree. It represents the cost complexity measure, where a higher `cp` value leads to a more pruned (simpler) tree. The results show how changes in `cp` affect key performance metrics like RMSE (Root Mean Squared Error), R-squared, and MAE (Mean Absolute Error).
+
+2. **Optimal CP Value Selection**: The final value of `cp = 0.001` was chosen as it resulted in the lowest RMSE. In predictive modeling, especially in regression-based models, a lower RMSE indicates better model performance, as it means the model's predictions are closer to the actual values. The choice of RMSE as the criterion for model selection suggests that the primary focus is on minimizing the prediction error.
+
+3. **Trade-off between Model Complexity and Accuracy**: The selection of `cp = 0.001` over `cp = 0.000`, despite the latter having a slightly higher R-squared, indicates a trade-off. A full tree (`cp = 0.000`) might have slightly better explanatory power (as seen by a marginally higher R-squared) but is more complex and potentially overfitted. The model with `cp = 0.001` offers a balance by reducing overfitting (through slight pruning) while still maintaining a relatively high level of accuracy.
+
+4. **Increasing CP and Model Performance Degradation**: As the `cp` value increases beyond `0.001`, there's a notable increase in RMSE and a decrease in R-squared. This pattern suggests that overly pruning the tree (increasing `cp`) leads to a loss in the model's ability to explain the variance in the data and predict accurately, likely due to underfitting.
+
+5. **Why Not Choose Lower CPs?**: While lower `cp` values (like `0.000`) may yield slightly better R-squared, the risk of overfitting is high. Overfitting means the model performs well on training data but poorly on unseen data. Therefore, the choice of `cp = 0.001` represents a balance between model complexity, risk of overfitting, and predictive accuracy.
+
+In summary, these results from the pivot study are instrumental in choosing an optimal `cp` value that balances model complexity, risk of overfitting, and the ability to accurately predict outcomes. The decision to use `cp = 0.001` as the final value for the model is a strategic choice aimed at achieving a model that is not only accurate but also generalizable to new, unseen data.
+Baseline Performance Metrics: The Pivot Study provides baseline metrics (like RMSE, R-squared, etc.) against which the performance of more complex models (like Random Forests) can be compared. This comparison helps in assessing whether the increased complexity of more advanced models is justified by a significant improvement in performance.
+
+After completing the pivot study with your decision tree model and selecting the optimal `cp` value, your next step is to build the Random Forest model. 
+
+
+
+---
+
+
+
+**Build the Random Forest Model**:
+- Random Forests require fewer hyperparameters than some models, but you still might want to tune parameters like the number of trees (`ntree`) and the number of variables randomly sampled as candidates at each split (`mtry`).
+- This code builds a Random Forest model predicting `PotentialFraud` using all other variables as predictors. The `ntree` parameter defines the number of trees in the forest (100 in this case), and `mtry` is the number of variables considered at each split.
+
+
+```{r warning=FALSE, include=FALSE}
+pacman::p_load(ranger)
+
+
+set.seed(1000)  # For reproducibility
+rf_model_ranger <- ranger(
+    PotentialFraud ~ ., 
+    data = train, 
+    num.trees = 100, 
+    mtry = sqrt(ncol(train)), 
+    importance = 'impurity'  # Optional: for variable importance
+)
+
+```
+
+
+
+```{r warning=FALSE, include=FALSE}
+# View the model's parameters
+rf_model_ranger
+```
+
+
+### 4. **Model Evaluation**:
+
+
+
+```{r warning=FALSE, include=FALSE}
+pacman::p_load(caret, pROC)
+# Generate predictions on the validation set
+validation_predictions <- predict(rf_model_ranger, data = validation)$predictions
+
+```
+
+
+```{r warning=FALSE, include=FALSE}
+# export predictions as rf_predictions
+write.csv(tuned_predictions, "rf_predictions.csv", row.names = FALSE)
+```
+
+
+Confusion Matrix:
+```{r warning=FALSE, include=FALSE}
+# Assuming PotentialFraud is a binary factor with levels 0 and 1
+validation_predictions_binary <- ifelse(validation_predictions > 0.5, 1, 0)
+validation_predictions_binary <- factor(validation_predictions_binary, levels = c(0, 1))
+validation_actual <- factor(validation$PotentialFraud, levels = c(0, 1))
+confusionMatrix(validation_predictions_binary, validation_actual)
+```
+
+Confusion Matrix and Statistics
+
+          Reference
+Prediction     0     1
+         0 29889  9859
+         1  4866 11207
+
+               Accuracy : 0.7362
+                 95% CI : (0.7325, 0.7399)
+    No Information Rate : 0.6226
+    P-Value [Acc > NIR] : < 2.2e-16
+
+                  Kappa : 0.4112
+
+ Mcnemar's Test P-Value : < 2.2e-16
+
+            Sensitivity : 0.8600
+            Specificity : 0.5320
+         Pos Pred Value : 0.7520
+         Neg Pred Value : 0.6973
+             Prevalence : 0.6226
+         Detection Rate : 0.5354
+   Detection Prevalence : 0.7121
+      Balanced Accuracy : 0.6960
+
+       'Positive' Class : 0
+
+
+
+AUC:
+```{r warning=FALSE, include=FALSE}
+roc_result <- roc(validation$PotentialFraud, validation_predictions)
+auc(roc_result)
+```
+> auc(roc_result)
+Area under the curve: 0.7877
+
+
+
+### 5. **Feature Importance**:
+
+
+```{r warning=FALSE, include=FALSE}
+# View feature importance
+rf_model_ranger$variable.importance
+```
+
+> # View feature importance
+> rf_model_ranger$variable.importance
+          ClmAdmitDiagnosisCode              ClmDiagnosisCode_1
+                       958.1359                        317.7424
+             ClmDiagnosisCode_2              ClmDiagnosisCode_9
+                      1306.7649                        526.8755
+            ClmDiagnosisCode_10                          Gender
+                       114.3469                       1394.6837
+                           Race           RenalDiseaseIndicator
+                      1287.0801                        987.2443
+                          State                          County
+                     10800.9071                      12560.9013
+          ChronicCond_Alzheimer        ChronicCond_Heartfailure
+                      1357.4809                       1303.2678
+      ChronicCond_KidneyDisease              ChronicCond_Cancer
+                      1170.7386                       1033.7385
+     ChronicCond_ObstrPulmonary          ChronicCond_Depression
+                      1208.0255                       1287.5939
+           ChronicCond_Diabetes       ChronicCond_IschemicHeart
+                      1196.8058                       1151.8568
+       ChronicCond_Osteoporasis ChronicCond_rheumatoidarthritis
+                      1302.8179                       1303.8974
+             ChronicCond_stroke                             Age
+                       825.9307                       8296.0493
+               WeekendAdmission                          IsDead
+                       189.8244                        166.5196
+       ClaimSettlementDelay_Cat           TreatmentDuration_Cat
+                       893.6408                        160.2872
+           Log_TotalClaimAmount               Log_IPTotalAmount
+                      8624.4023                       4168.4982
+              Log_OPTotalAmount                 UniquePhysCount
+                      9832.8555                       1187.3436
+           IsSamePhysMultiRole1            IsSamePhysMultiRole2
+                       788.2041                        207.9282
+                      PHY412132                       PHY337425
+                       647.0834                        375.3061
+                      PHY330576
+                       772.7831
+
+
+### 6. **Fine-Tuning**:
+   - Based on the initial performance, you might choose to fine-tune your model. This could involve adjusting `ntree`, `mtry`, or trying other pre-processing steps.
+
+
+### 1. **Assessing Model Performance**:
+   - **Accuracy**: model has an accuracy of 73.62%. Whether this is sufficient depends on the context of your problem and the baseline performance (e.g., previous models or domain expectations).
+   - **Sensitivity and Specificity**: There's a noticeable trade-off in your model between sensitivity (86.00%) and specificity (53.20%). This indicates that while the model is good at identifying actual cases of fraud (sensitivity), it's less effective at correctly identifying non-fraud cases (specificity).
+   - **Balanced Accuracy**: The balanced accuracy of 69.60% suggests room for improvement, especially in terms of specificity.
+
+### 2. **Feature Importance Analysis**:
+   - The `variable.importance` output shows the features most influential in predicting the outcome. Features like `County`, `State`, and `Log_OPTotalAmount` seem to have high importance. This can guide you in feature engineering or in understanding which features are driving your model's predictions.
+
+### 3. **Fine-Tuning Strategies**:
+   - **Adjust Model Parameters**: Experiment with different values for `num.trees`, `mtry`, and `min.node.size` in the `ranger` function. A systematic approach like grid search or random search can be used to explore the parameter space.
+   - **Feature Engineering**: Based on the importance scores, you might consider creating new features, combining existing ones, or removing less important features to see how it impacts model performance.
+   - **Address Class Imbalance**: If your dataset has class imbalance, consider techniques like SMOTE (Synthetic Minority Over-sampling Technique) or adjusting class weights.
+   - **Threshold Tuning**: Adjust the threshold used to convert probabilities to binary classifications. This can help in balancing sensitivity and specificity according to your specific needs.
+   - **Cross-Validation**: Use cross-validation to ensure that your fine-tuning is robust and not just fitting to peculiarities in your validation set.
+
+
+```{r warning=FALSE, include=FALSE}
+
+importance_scores <- rf_model_ranger$variable.importance
+threshold <- 500  # Set a threshold for importance scores
+important_features <- names(importance_scores[importance_scores > threshold])
+
+# Include only important features in your training data
+train_important <- train[, c(important_features, "PotentialFraud")]
+```
+
+---
+
+
+```{r warning=FALSE, include=FALSE}
+# For the validation dataset
+validation_important <- validation[, c(important_features, "PotentialFraud")]
+
+# For the test dataset
+test_important <- test[, c(important_features, "PotentialFraud")]
+```
+
+```{r warning=FALSE, include=FALSE}
+head(validation_important)
+```
+
+
+```{r warning=FALSE, include=FALSE}
+# Write to CSV files
+write.csv(train_important, "train_important.csv", row.names = FALSE)
+write.csv(validation_important, "validation_important.csv", row.names = FALSE)
+write.csv(test_important, "test_important.csv", row.names = FALSE)
+
+```
+
+# Load from CSV files
+train_important <- read.csv("train_important.csv")
+validation_important <- read.csv("validation_important.csv")
+test_important <- read.csv("test_important.csv")
+
+
+
+
+
+---
+
+
+
+```{r warning=FALSE, include=FALSE}
+tuned_rf_model <- ranger(
+    PotentialFraud ~ ., 
+    data = train_important, 
+    num.trees = 200, 
+    mtry = sqrt(ncol(train)),
+    min.node.size = 10,  # Optional: for tree complexity 
+    importance = 'impurity'  # Optional: for variable importance
+)
+
+```
+
+```{r warning=FALSE, include=FALSE}
+
+saveRDS(tuned_rf_model, file = "tuned_rf_model.rds")
+```
+
+```{r warning=FALSE, include=FALSE}
+# Generate predictions on the validation set
+tuned_predictions <- predict(tuned_rf_model, data = validation)$predictions
+```
+
+
+```{r warning=FALSE, include=FALSE}
+# export predictions as rf_predictions
+write.csv(tuned_predictions, "rf_predictions.csv", row.names = FALSE)
+```
+
+
+Confusion Matrix:
+```{r warning=FALSE, include=FALSE}
+# PotentialFraud is a binary factor with levels 0 and 1
+tuned_predictions_binary <- ifelse(tuned_predictions > 0.5, 1, 0)
+tuned_predictions_binary <- factor(tuned_predictions_binary, levels = c(0, 1))
+tuned_actual <- factor(validation$PotentialFraud, levels = c(0, 1))
+confusionMatrix(tuned_predictions_binary, tuned_actual)
+```
+> confusionMatrix(tuned_predictions_binary, tuned_actual)
+Confusion Matrix and Statistics
+
+          Reference
+Prediction     0     1
+         0 30057  9421
+         1  4698 11645
+
+               Accuracy : 0.7471
+                 95% CI : (0.7434, 0.7507)
+    No Information Rate : 0.6226
+    P-Value [Acc > NIR] : < 2.2e-16
+
+                  Kappa : 0.4369
+
+ Mcnemar's Test P-Value : < 2.2e-16
+
+            Sensitivity : 0.8648
+            Specificity : 0.5528
+         Pos Pred Value : 0.7614
+         Neg Pred Value : 0.7125
+             Prevalence : 0.6226
+         Detection Rate : 0.5385
+   Detection Prevalence : 0.7072
+      Balanced Accuracy : 0.7088
+
+       'Positive' Class : 0
+
+
+based on the confusion matrix and statistics, it appears that the model's performance has improved after fine-tuning by removing less important features. Let's compare the key metrics before and after fine-tuning:
+
+### Before Fine-Tuning:
+- **Accuracy**: 73.76%
+- **Sensitivity**: 87.07%
+- **Specificity**: 51.79%
+- **Positive Predictive Value (PPV) / Precision**: 74.87%
+- **Negative Predictive Value (NPV)**: 70.83%
+- **Balanced Accuracy**: 69.43%
+
+### After Fine-Tuning:
+- **Accuracy**: 74.71% (Improved)
+- **Sensitivity**: 86.48% (Slightly Decreased)
+- **Specificity**: 55.28% (Improved)
+- **Positive Predictive Value (PPV) / Precision**: 76.14% (Improved)
+- **Negative Predictive Value (NPV)**: 71.29% (Improved)
+- **Balanced Accuracy**: 70.88% (Improved)
+
+### Analysis:
+- **Accuracy**: There's a noticeable improvement in the overall accuracy of the model.
+- **Sensitivity and Specificity**: While there's a slight decrease in sensitivity, the specificity has improved. This means the model is now better at correctly identifying non-fraud cases without a significant loss in its ability to detect actual fraud cases.
+- **Precision and Recall (NPV)**: Both precision and NPV have improved, indicating better overall predictive performance.
+- **Balanced Accuracy**: The increase in balanced accuracy suggests that the model is now more balanced in terms of sensitivity and specificity.
+
+The fine-tuning of your Random Forest model, by focusing on the most important features, has led to an overall improvement in its performance. This is evident in the increased accuracy, specificity, precision, and balanced accuracy. The slight decrease in sensitivity is a common trade-off in classification problems, especially when trying to improve specificity and precision.
+
+results demonstrate the effectiveness of feature selection as a strategy for improving model performance. By focusing on the most impactful features, the model likely became more generalizable and less prone to overfitting, leading to these improvements.
+
+
+
+### 7. **Final Evaluation on Test Set**:
+   - Once you are satisfied with your model's performance on the validation set, perform the final evaluation on the test set. This will give you an unbiased assessment of your model's performance.
+
+### 8. **Document Results and Insights**:
+   - Document the performance of the Random Forest model and any insights gained, especially in comparison to the decision tree model. This documentation is crucial for your academic report and for understanding the strengths and weaknesses of different models.
+
+
+Feature Importance Plot:
+
+```{r warning=FALSE, include=FALSE}
+# Plotting Feature Importance
+importance_df <- as.data.frame(tuned_rf_model$variable.importance)
+names(importance_df) <- c("Importance")
+importance_df$Feature <- rownames(importance_df)
+importance_df <- importance_df[order(-importance_df$Importance), ]
+
+library(ggplot2)
+ggplot(importance_df, aes(x = reorder(Feature, -Importance), y = Importance)) +
+    geom_bar(stat = "identity") +
+    theme_minimal() +
+    coord_flip() +
+    labs(title = "Feature Importance in Random Forest Model",
+         x = "Feature",
+         y = "Importance")
+
+# export plot
+ggsave("feature_importance.png", width = 10, height = 6, dpi = 300)
+```
+
+
+ROC Curve:
+
+```{r warning=FALSE, include=FALSE}
+# ROC Curve
+predictions_prob <- predict(tuned_rf_model, data = validation, type = 'response')$predictions
+roc_curve <- roc(validation$PotentialFraud, predictions_prob)
+plot(roc_curve, main = "ROC Curve")
+abline(a = 0, b = 1, lty = 2)
+```
+
+```{r warning=FALSE, include=FALSE}
+# export plot
+ggsave("roc_curve.png", width = 10, height = 6, dpi = 300)
+```
+
+
+Confusion Matrix Heatmap:
+```{r warning=FALSE, include=FALSE}
+# Confusion matrix data
+conf_matrix_data <- matrix(c(29982, 9389, 4773, 11677), nrow = 2, byrow = TRUE)
+rownames(conf_matrix_data) <- c('Prediction: 0', 'Prediction: 1')
+colnames(conf_matrix_data) <- c('Actual: 0', 'Actual: 1')
+
+# Convert to data frame for ggplot
+conf_matrix_df <- as.data.frame(conf_matrix_data)
+conf_matrix_df$Prediction <- rownames(conf_matrix_df)
+conf_matrix_melted <- reshape2::melt(conf_matrix_df, id.vars = "Prediction")
+```
+
+```{r warning=FALSE, include=FALSE}
+ggplot(conf_matrix_melted, aes(x = variable, y = Prediction, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient(low = "#ffffff", high = "#343488") +
+  labs(title = "Confusion Matrix Heatmap",
+       x = "Actual Category",
+       y = "Predicted Category",
+       fill = "Count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+
+
+```{r warning=FALSE, include=FALSE}
+# export plot
+ggsave("confusion_matrix_heatmap_rf.png", width = 10, height = 6, dpi = 300)
+```
+
+Accuracy vs. Number of Trees:
+```{r warning=FALSE, include=FALSE}
+# Accuracy vs. Number of Trees (Requires retraining models with different ntree values)
+ntrees <- c(100, 150, 200)
+accuracy_values <- c()  # Store accuracy values for each ntree
+
+for (n in ntrees) {
+    model <- ranger(
+        PotentialFraud ~ ., 
+        data = train, 
+        num.trees = n, 
+        mtry = sqrt(ncol(train)), 
+        importance = 'impurity'
+    )
+    predictions <- predict(model, data = validation)$predictions
+    predictions_binary <- ifelse(predictions > 0.5, 1, 0)
+    accuracy <- sum(predictions_binary == validation$PotentialFraud) / length(predictions_binary)
+    accuracy_values <- c(accuracy_values, accuracy)
+}
+
+# Plotting Accuracy vs. Number of Trees
+data.frame(ntrees, accuracy_values) %>%
+    ggplot(aes(x = ntrees, y = accuracy_values)) +
+    geom_line() +
+    theme_minimal() +
+    labs(title = "Accuracy vs. Number of Trees in Random Forest",
+         x = "Number of Trees",
+         y = "Accuracy")
+
+```
+
+```{r warning=FALSE, include=FALSE}
+# export plot
+ggsave("accuracy_vs_ntrees.png", width = 10, height = 6, dpi = 300)
+```
+
+
+---
+
+**Pivot Study: Decision Tree Preliminary Analysis**
+The analytical process began with a Pivot Study focusing on a single decision tree model. This initial step is crucial for two key reasons: it aids in understanding the impact of different complexity parameters (`cp`) on model performance and establishes a baseline for comparison with more advanced models like Random Forests, SVMs, and Neural Networks.
+
+Utilizing the `rpart` package in R, a K-Fold Cross-Validation analysis was conducted with a detailed tuning grid for the complexity parameter. This approach allowed for a precise assessment of the trade-off between model complexity and performance. The findings indicated that a `cp` value of 0.001 was optimal, balancing the need to prevent overfitting while maintaining predictive accuracy. Lower `cp` values, though resulting in a marginally higher R-squared, posed a risk of overfitting, while higher values indicated underfitting, as evidenced by increased RMSE and decreased R-squared.
+
+These insights are invaluable, laying the groundwork for the subsequent modeling phases. Understanding the nuances of model complexity and predictive accuracy in the context of a decision tree provides foundational knowledge that informs the approach to the more complex models that follow.
+
+
+**Table 1** presents the performance metrics of a decision tree model across a range of complexity parameter (`cp`) values. The table summarizes the outcomes of a 10-fold cross-validation process, highlighting three key metrics: Root Mean Squared Error (RMSE), R-squared, and Mean Absolute Error (MAE), rounded to three decimal places. 
+
+- **RMSE**: This metric measures the average magnitude of the errors between predicted values and actual values, with a lower RMSE indicating better model performance.
+- **R-squared**: This statistic reflects the proportion of the variance in the dependent variable that is predictable from the independent variables. A higher R-squared value indicates a model that explains more of the variability around the mean.
+- **MAE**: Mean Absolute Error represents the average of the absolute differences between predicted values and observed values. Lower values of MAE indicate better prediction accuracy.
+
+The range of `cp` values, from 0.000 to 0.010, demonstrates the effect of varying the decision tree's complexity on its predictive accuracy. As `cp` increases, the tree becomes more pruned (simpler), but the key is to find a `cp` value that achieves an optimal balance between model simplicity and predictive accuracy. This balance is critical to avoid overfitting (where the model learns noise and details in the training data to an extent that it negatively impacts the performance on new data) and underfitting (where the model fails to capture the underlying trend of the data).

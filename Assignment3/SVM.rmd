@@ -1,0 +1,233 @@
+---
+title: |
+  | INFS_SP5_2023
+  | Predictive Analytics
+  | Assignment 3 
+  | Classification
+
+author: 
+  - "Huining Huang: huahy057@mymail.unisa.edu.au" 
+output: 
+  pdf_document:
+    toc: true
+editor_options:
+  chunk_output_type: console
+---
+
+
+
+```{r echo = FALSE, include=FALSE}
+# clear all variables, functions, etc
+# clean up memory
+rm(list=ls())
+# clean up memory
+gc()
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  fig.width = 8, 
+  fig.asp = 0.618, 
+  out.width = "80%",
+  fig.align = "center", 
+  root.dir = "../",
+  message = FALSE,
+  size = "small"
+)
+```
+
+
+```{r warning=FALSE, include=FALSE}
+pacman::p_load(tidyverse)
+pacman::p_load(knitr,dplyr,AICcmodavg)
+pacman::p_load(inspectdf,tidyr,stringr, stringi,DT,mice)
+pacman::p_load(caret,modelr)
+pacman::p_load(mlbench,mplot)
+pacman::p_load(tidymodels,glmx)
+pacman::p_load(skimr,vip,yardstick,ranger,kknn,funModeling,Hmisc)
+pacman::p_load(ggplot2,ggpubr,GGally)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+
+
+```{r warning=FALSE, include=FALSE}
+# Decision tree
+pacman::p_load(rpart.plot)
+
+# Data manipulation
+pacman::p_load(rgl, rattle, mice, dplyr, tidyverse)
+
+# Plotting
+pacman::p_load(viridis, hrbrthemes, ggplot2, heplots, ggpubr, forcats)
+```
+
+
+re-use the data afer feature selection that from the Random forest model
+
+---
+
+The initial data preparation and splitting seem appropriate for creating a Support Vector Machine (SVM) model. For the SVM model, the `e1071` package in R can be used, which provides a convenient wrapper for the `svm` function from the libsvm library. 
+
+### Pivot Study with SVM
+
+The initial data preparation and splitting seem appropriate for creating a Support Vector Machine (SVM) model. For the SVM model, the `e1071` package in R can be used, which provides a convenient wrapper for the `svm` function from the libsvm library. Let's proceed with drafting the R code for the SVM Pivot Study, model building, model evaluation, and fine-tuning:
+
+
+```{r warning=FALSE, include=FALSE}
+# Load data
+data <- read.csv("data.csv", header = TRUE, sep = ",")
+nrow(data)
+names(data)
+# head(data)
+```
+
+
+```{r warning=FALSE, include=FALSE}
+set.seed(1000)  # Setting a seed for reproducibility
+
+total_rows <- nrow(data)
+train_size <- 0.8 * total_rows
+validation_size <- 0.1 * total_rows
+test_size <- 0.1 * total_rows
+
+# Splitting the data into train, validation, and test sets
+train_index <- sample(1:total_rows, train_size)
+remaining_data <- setdiff(1:total_rows, train_index)
+validation_index <- sample(remaining_data, validation_size)
+test_index <- setdiff(remaining_data, validation_index)
+
+train <- data[train_index, ]
+validation <- data[validation_index, ]
+test <- data[test_index, ]
+```
+
+
+```{r warning=FALSE, include=FALSE}
+# Move PotentialFraud to the last column in the train dataset
+train <- train[c(setdiff(names(train), "PotentialFraud"), "PotentialFraud")]
+
+# Move PotentialFraud to the last column in the test dataset
+test <- test[c(setdiff(names(test), "PotentialFraud"), "PotentialFraud")]
+```
+
+---
+
+
+```{r warning=FALSE, include=FALSE}
+pacman::p_load(ranger, caret, pROC)
+set.seed(1000)  # For reproducibility
+rf_model_ranger <- ranger(
+    PotentialFraud ~ ., 
+    data = train, 
+    num.trees = 100, 
+    mtry = sqrt(ncol(train)), 
+    importance = 'impurity'
+)
+```
+
+
+```{r warning=FALSE, include=FALSE}
+# Extracting importance scores and sorting them
+importance_scores <- rf_model_ranger$variable.importance
+sorted_features <- sort(importance_scores, decreasing = TRUE)
+```
+
+```{r warning=FALSE, include=FALSE}
+# Selecting the top 10 features
+top_10_features <- names(sorted_features)[1:10]
+```
+
+
+```{r warning=FALSE, include=FALSE}
+# For the training dataset
+train_important <- train[, c(top_10_features, "PotentialFraud")]
+
+# For the validation dataset
+validation_important <- validation[, c(top_10_features, "PotentialFraud")]
+
+# For the test dataset
+test_important <- test[, c(top_10_features, "PotentialFraud")]
+```
+
+
+```{r warning=FALSE, include=FALSE}
+head(train_important)
+```
+
+
+---
+
+
+
+
+
+
+### Pivot Study with SVM
+
+```{r warning=FALSE, include=FALSE}
+# Load the necessary package for SVM
+library(e1071)
+
+# Pivot Study with different kernels
+set.seed(1000)  # Ensure reproducibility
+
+# Linear Kernel SVM
+svm_linear <- svm(PotentialFraud ~ ., data = train, kernel = "linear", cost = 1, scale = FALSE)
+
+
+```
+
+# Polynomial Kernel SVM
+svm_poly <- svm(PotentialFraud ~ ., data = train, kernel = "polynomial", degree = 3, cost = 1, scale = FALSE)
+
+# Radial Basis Function Kernel SVM
+svm_rbf <- svm(PotentialFraud ~ ., data = train, kernel = "radial", gamma = 0.1, cost = 1, scale = FALSE)
+```
+
+### Model Building and Evaluation
+
+```r
+# Choose the best-performing kernel based on cross-validation
+# Here we use RBF as an example for further steps
+svm_model <- svm_rbf
+
+# Model Evaluation on the validation set
+validation_predictions <- predict(svm_model, validation)
+
+# Confusion Matrix for the validation set
+library(caret)
+confusionMatrix(validation_predictions, validation$PotentialFraud)
+```
+
+### Fine-Tuning SVM Model
+
+Fine-tuning can involve adjusting the `cost` and `gamma` parameters for the RBF kernel, as well as trying different degrees for the polynomial kernel.
+
+```r
+# Fine-tuning the SVM with RBF kernel
+tune_result <- tune(svm, train.x = PotentialFraud ~ ., data = train,
+                    kernel = "radial",
+                    ranges = list(cost = 10^(-1:2), gamma = 10^(-2:1)))
+
+best_model <- tune_result$best.model
+
+# Evaluate the best model on the validation set
+validation_predictions_tuned <- predict(best_model, validation)
+confusionMatrix(validation_predictions_tuned, validation$PotentialFraud)
+```
+
+### Summary
+
+After these steps, you would examine the output from the confusion matrices to compare the performance of the different models and their fine-tuned versions. The best-performing SVM model on the validation set, based on accuracy, precision, recall, and other relevant metrics, would then be tested on the test set to estimate its performance on unseen data.
+
+Remember to save your SVM model after fine-tuning so you can apply it to the test set without having to retrain it.
+
+```r
+# Save the fine-tuned model
+saveRDS(best_model, "svm_model.rds")
+```
+
+This code will create several SVM models with different kernels, evaluate their performance on the validation set, and fine-tune the parameters of the best-performing kernel. The `tune` function automates the search over the specified range of `cost` and `gamma` values for the RBF kernel. The final model can be saved for later use or to make predictions on new data.
